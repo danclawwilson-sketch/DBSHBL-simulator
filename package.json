@@ -1,0 +1,11 @@
+{
+  "name": "dbshbl-simulator",
+  "version": "1.0.0",
+  "description": "DB-SH-BL Strategy Simulator V6",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
