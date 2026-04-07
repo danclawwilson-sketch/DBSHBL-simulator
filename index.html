@@ -2,208 +2,713 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>DB-SH 雙管線飛輪模擬器 V2.5</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB+SH vs BL+SH 策略模擬器</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --primary: #f3ba2f; --bg: #181a20; --card: #2b3139; --text: #eaecef; --border: #474d57; }
-        body { font-family: "Segoe UI", Tahoma, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
-        .panel { background: var(--card); padding: 20px; border-radius: 12px; height: fit-content; }
-        h2 { color: var(--primary); font-size: 1.3rem; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        .input-group { margin-bottom: 12px; }
-        label { display: block; font-size: 0.8rem; color: #848e9c; margin-bottom: 4px; }
-        input { width: 100%; background: #12161c; border: 1px solid var(--border); color: white; padding: 8px; border-radius: 6px; box-sizing: border-box; }
-        button { width: 100%; background: var(--primary); color: #000; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; margin-top: 10px; }
-        button:hover { opacity: 0.9; }
-        .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
-        @media (min-width: 1000px) { .dashboard { grid-template-columns: repeat(6, 1fr); } }
-        .stat-card { background: var(--card); padding: 12px; border-radius: 10px; text-align: center; border: 1px solid var(--border); }
-        .stat-label { font-size: 0.7rem; color: #848e9c; margin-bottom: 4px; }
-        .stat-value { font-size: 1rem; font-weight: bold; color: var(--primary); }
-        .chart-container { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; }
-        .log-container { background: #12161c; padding: 15px; border-radius: 10px; height: 350px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 0.8rem; }
-        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #2b3139; padding-bottom: 4px; }
-        .tag { padding: 2px 5px; border-radius: 4px; font-weight: bold; font-size: 0.7rem; margin-right: 5px; }
-        .tag-db { background: #2ebd85; color: white; }
-        .tag-sh { background: #f6465d; color: white; }
-        .tag-fill { background: #3c52e4; color: white; }
-        .tag-lock { background: #474d57; color: #ccc; }
+        :root {
+            --bg: #0a0e17;
+            --card: #111827;
+            --border: #1f2937;
+            --accent: #00d9ff;
+            --accent2: #00ff88;
+            --orange: #ff8c00;
+            --red: #ff4466;
+            --yellow: #ffc500;
+            --text: #e5e7eb;
+            --text2: #9ca3af;
+            --mono: 'Courier New', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--mono);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: var(--accent);
+            font-size: 1.5rem;
+            letter-spacing: 3px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .panel h2 {
+            color: var(--accent);
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text2);
+            margin-bottom: 5px;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: var(--mono);
+            font-size: 0.85rem;
+        }
+        .strategy-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+        .strategy-title {
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .db-title { background: rgba(0, 217, 255, 0.1); color: var(--accent); }
+        .bl-title { background: rgba(255, 140, 0, 0.1); color: var(--orange); }
+        .sh-title { background: rgba(255, 68, 102, 0.1); color: var(--red); }
+        .btn {
+            width: 100%;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: var(--mono);
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        .btn:hover { opacity: 0.9; }
+        .results {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .result-col {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .result-col.db-col { border-top: 3px solid var(--accent); }
+        .result-col.bl-col { border-top: 3px solid var(--orange); }
+        .result-header {
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--bg);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text2);
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--text);
+        }
+        .stat-value.green { color: var(--accent2); }
+        .stat-value.red { color: var(--red); }
+        .stat-value.orange { color: var(--orange); }
+        .chart-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg);
+            border-radius: 6px;
+        }
+        .log-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg);
+            border-radius: 6px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 0.75rem;
+        }
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.7rem;
+            margin-right: 5px;
+        }
+        .tag-db { background: rgba(0, 217, 255, 0.2); color: var(--accent); }
+        .tag-bl { background: rgba(255, 140, 0, 0.2); color: var(--orange); }
+        .tag-sh { background: rgba(255, 68, 102, 0.2); color: var(--red); }
+        @media (max-width: 1200px) {
+            .container { grid-template-columns: 1fr; }
+            .results { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <div class="panel">
-        <h2>策略參數設定</h2>
-        <div class="input-group"><label>初始備用金 (USDT)</label><input type="number" id="initReserve" value="7000"></div>
-        <div class="input-group"><label>USDT 水池數量 (E1-E8)</label><input type="number" id="poolCount" value="8"></div>
-        <div class="input-group"><label>單池初始金額 (USDT)</label><input type="number" id="poolSize" value="1000"></div>
-        
-        <h3 style="color: #2ebd85; font-size: 0.9rem;">DB 參數 (折價買幣)</h3>
-        <div class="input-group"><label>DB 天數 (結算週期)</label><input type="number" id="dbDays" value="1"></div>
-        <div class="input-group"><label>門檻價 KO (+%)</label><input type="number" id="dbKO" value="4.5"></div>
-        <div class="input-group"><label>目標買價 Target (-%)</label><input type="number" id="dbTarget" value="3.5"></div>
-        <div class="input-group"><label>保本年化 APR (%)</label><input type="number" id="dbAPR" value="30"></div>
-
-        <h3 style="color: #f6465d; font-size: 0.9rem;">SH 參數 (雙幣看漲)</h3>
-        <div class="input-group"><label>SH 天數</label><input type="number" id="shDays" value="1"></div>
-        <div class="input-group"><label>高賣目標價 (+%)</label><input type="number" id="shTarget" value="3"></div>
-        <div class="input-group"><label>高賣年化 APR (%)</label><input type="number" id="shAPR" value="187"></div>
-        <button onclick="startSimulation()">開始 365 天歷史回測</button>
+    <div class="header">
+        <h1>◈ DB+SH vs BL+SH 策略模擬器</h1>
+        <p style="color: var(--text2); font-size: 0.8rem; margin-top: 10px;">
+            組合一: 折價買幣 + 高價賣出 | 組合二: 低價買入 + 高價賣出
+        </p>
     </div>
-
-    <div>
-        <div class="dashboard">
-            <div class="stat-card"><div class="stat-label">ETH 當前均價</div><div id="resEthPrice" class="stat-value">--</div></div>
-            <div class="stat-card"><div class="stat-label">ETH Pool 數量</div><div id="resEthQty" class="stat-value">--</div></div>
-            <div class="stat-card"><div class="stat-label">總資產淨值</div><div id="resTotal" class="stat-value">--</div></div>
-            <div class="stat-card"><div class="stat-label">備用金庫餘額</div><div id="resReserve" class="stat-value">--</div></div>
-            <div class="stat-card"><div class="stat-label">ETH 倉位價值</div><div id="resETHPool" class="stat-value">--</div></div>
-            <div class="stat-card"><div class="stat-label">總報酬率</div><div id="resROI" class="stat-value">--</div></div>
-        </div>
-        <div class="chart-container"><canvas id="mainChart"></canvas></div>
+    
+    <div class="container">
         <div class="panel">
-            <h3>策略日誌 (DB-SH 運作明細)</h3>
-            <div id="logConsole" class="log-container">等待操作...</div>
+            <h2>⚙ 全域參數設定</h2>
+            
+            <div class="input-group">
+                <label>初始總資金 (USDT)</label>
+                <input type="number" id="totalCapital" value="10000">
+            </div>
+            
+            <div class="input-group">
+                <label>水池數量 (個)</label>
+                <input type="number" id="poolCount" value="6" min="1" max="20">
+            </div>
+            
+            <div class="input-group">
+                <label>每池金額 (USDT)</label>
+                <input type="number" id="poolSize" value="1000">
+            </div>
+            
+            <div class="strategy-section">
+                <div class="strategy-title db-title">DB 參數 (組合一)</div>
+                <div class="input-group">
+                    <label>DB 週期天數 (統一結算)</label>
+                    <input type="number" id="dbDays" value="7" min="1">
+                </div>
+                <div class="input-group">
+                    <label>Target Price (-%)</label>
+                    <input type="number" id="dbTarget" value="4.5" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Knock Out (+%)</label>
+                    <input type="number" id="dbKO" value="1" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>DB 年化 APR (%)</label>
+                    <input type="number" id="dbAPR" value="30">
+                </div>
+            </div>
+            
+            <div class="strategy-section">
+                <div class="strategy-title bl-title">BL 參數 (組合二)</div>
+                <div class="input-group">
+                    <label>BL 週期天數 (獨立結算)</label>
+                    <input type="number" id="blDays" value="1" min="1">
+                </div>
+                <div class="input-group">
+                    <label>低買折扣 (-%)</label>
+                    <input type="number" id="blDiscount" value="44" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>BL 年化 APR (%)</label>
+                    <input type="number" id="blAPR" value="333">
+                </div>
+            </div>
+            
+            <div class="strategy-section">
+                <div class="strategy-title sh-title">SH 共用參數</div>
+                <div class="input-group">
+                    <label>SH 天數</label>
+                    <input type="number" id="shDays" value="1" min="1">
+                </div>
+                <div class="input-group">
+                    <label>高賣目標 (+%)</label>
+                    <input type="number" id="shTarget" value="3" step="0.1">
+                </div>
+                <div class="input-group">
+                    <label>SH 年化 APR (%)</label>
+                    <input type="number" id="shAPR" value="350">
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label>回測天數</label>
+                <select id="backtestDays">
+                    <option value="30">30 天</option>
+                    <option value="90">90 天</option>
+                    <option value="180">180 天</option>
+                    <option value="365" selected>365 天</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="runSimulation()">▶ 開始回測</button>
+        </div>
+        
+        <div class="results">
+            <div class="result-col db-col">
+                <div class="result-header" style="color: var(--accent);">// 組合一: DB + SH</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">總資產淨值</div>
+                        <div class="stat-value" id="db-total">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ROI</div>
+                        <div class="stat-value" id="db-roi">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">備用金餘額</div>
+                        <div class="stat-value" id="db-reserve">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">DB 水池總值</div>
+                        <div class="stat-value" id="db-pools">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ETH 倉位價值</div>
+                        <div class="stat-value" id="db-eth">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ETH 均買成本</div>
+                        <div class="stat-value" id="db-cost">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">最大回撤</div>
+                        <div class="stat-value red" id="db-mdd">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">DB 勝率</div>
+                        <div class="stat-value green" id="db-winrate">--</div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="dbChart"></canvas>
+                </div>
+                <div class="log-container" id="db-log">
+                    <div style="color: var(--text2);">等待執行回測...</div>
+                </div>
+            </div>
+            
+            <div class="result-col bl-col">
+                <div class="result-header" style="color: var(--orange);">// 組合二: BL + SH</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">總資產淨值</div>
+                        <div class="stat-value" id="bl-total">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ROI</div>
+                        <div class="stat-value" id="bl-roi">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">備用金餘額</div>
+                        <div class="stat-value" id="bl-reserve">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">BL 水池總值</div>
+                        <div class="stat-value" id="bl-pools">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ETH 倉位價值</div>
+                        <div class="stat-value" id="bl-eth">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ETH 均買成本</div>
+                        <div class="stat-value" id="bl-cost">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">最大回撤</div>
+                        <div class="stat-value red" id="bl-mdd">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">BL 成交率</div>
+                        <div class="stat-value green" id="bl-winrate">--</div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="blChart"></canvas>
+                </div>
+                <div class="log-container" id="bl-log">
+                    <div style="color: var(--text2);">等待執行回測...</div>
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-let chartObj = null;
-
-async function startSimulation() {
-    const log = document.getElementById('logConsole');
-    log.innerHTML = "正在獲取幣安數據...";
-
-    let priceData = [];
-    try {
-        const response = await fetch('https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1d&limit=365');
-        const data = await response.json();
-        priceData = data.map(d => ({
-            date: new Date(d[0]).toLocaleDateString(),
-            open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4]),
-            avg: (parseFloat(d[2]) + parseFloat(d[3]) + parseFloat(d[4])) / 3
-        }));
-    } catch (e) { log.innerHTML = "失敗: " + e; return; }
-
-    let reserve = parseFloat(document.getElementById('initReserve').value);
-    let poolCount = parseInt(document.getElementById('poolCount').value);
-    let poolInitSize = parseFloat(document.getElementById('poolSize').value);
-    
-    // 初始化水池，加入剩餘天數與基準價追蹤
-    let pools = Array(poolCount).fill(0).map(() => ({ 
-        balance: poolInitSize, 
-        remainingDays: 0, 
-        basePrice: 0 
-    }));
-    let ethPool = { amount: 0, cost: 0, remainingDays: 0 };
-    
-    const dbDays = parseInt(document.getElementById('dbDays').value);
-    const dbKO_pct = parseFloat(document.getElementById('dbKO').value) / 100;
-    const dbTarget_pct = parseFloat(document.getElementById('dbTarget').value) / 100;
-    const dbAPR = parseFloat(document.getElementById('dbAPR').value) / 100;
-
-    const shDays = parseInt(document.getElementById('shDays').value);
-    const shTarget_pct = parseFloat(document.getElementById('shTarget').value) / 100;
-    const shAPR = parseFloat(document.getElementById('shAPR').value) / 100;
-
-    let equityHistory = [];
-    let dateLabels = [];
-    log.innerHTML = "";
-
-    for (let i = 0; i < priceData.length; i++) {
-        let today = priceData[i];
-        let yesterdayClose = (i === 0) ? today.open : priceData[i-1].close;
-
-        // --- 1. SH 策略處理 ---
-        if (ethPool.amount > 0) {
-            if (ethPool.remainingDays > 0) {
-                ethPool.remainingDays--;
+    <script>
+        // 模擬價格數據 (簡化版使用隨機生成)
+        function generatePriceData(days) {
+            const data = [];
+            let price = 2000;
+            const now = Date.now();
+            for (let i = days; i >= 0; i--) {
+                const change = (Math.random() - 0.5) * 0.05;
+                price = price * (1 + change);
+                data.push({
+                    date: new Date(now - i * 86400000).toLocaleDateString('zh-TW'),
+                    open: price * (1 + (Math.random() - 0.5) * 0.01),
+                    high: price * 1.02,
+                    low: price * 0.98,
+                    close: price,
+                    avg: price
+                });
             }
-            if (ethPool.remainingDays === 0) {
-                let shTargetPrice = ethPool.cost * (1 + shTarget_pct);
-                if (today.avg >= shTargetPrice) {
-                    let finalUSDT = ethPool.amount * shTargetPrice * (1 + (shAPR / 365 * shDays));
-                    reserve += finalUSDT;
-                    log.innerHTML += `<div class="log-entry"><b>${today.date}</b> <span class="tag tag-sh">SH 結算賣出</span> 匯入備用金 $${finalUSDT.toFixed(2)}</div>`;
-                    ethPool.amount = 0; ethPool.cost = 0;
-                } else {
-                    ethPool.amount *= (1 + (shAPR / 365 * shDays));
-                    ethPool.remainingDays = shDays; // 重新掛單
-                }
-            }
+            return data;
         }
 
-        // --- 2. DB 策略處理 ---
-        pools.forEach((p, idx) => {
-            // 如果水池空了或金額不足，補血
-            if (p.balance < poolInitSize && p.remainingDays === 0) {
-                let diff = poolInitSize - p.balance;
-                if (reserve >= diff) { reserve -= diff; p.balance = poolInitSize; }
-            }
-
-            if (p.balance > 0) {
-                if (p.remainingDays > 0) {
-                    p.remainingDays--; // 鎖定中
-                } else {
-                    // 結算日判斷 (如果是剛開始或是剛結束一個週期)
-                    if (p.basePrice > 0) {
-                        let koPrice = p.basePrice * (1 + dbKO_pct);
-                        let targetPrice = p.basePrice * (1 - dbTarget_pct);
-
-                        if (today.avg >= koPrice) {
-                            p.balance *= (1 + (dbAPR / 365 * dbDays));
-                        } else if (today.avg <= targetPrice) {
-                            let ethBought = p.balance / targetPrice;
-                            ethPool.amount += ethBought; ethPool.cost = targetPrice;
-                            ethPool.remainingDays = shDays; p.balance = 0;
-                            log.innerHTML += `<div class="log-entry"><b>${today.date}</b> <span class="tag tag-db">DB 情境一</span> E${idx+1} 買入 ETH</div>`;
-                        } else {
-                            let halfUSDT = p.balance / 2;
-                            let ethBought = halfUSDT / targetPrice;
-                            ethPool.amount += ethBought; ethPool.cost = targetPrice;
-                            ethPool.remainingDays = shDays; p.balance = halfUSDT;
-                            log.innerHTML += `<div class="log-entry"><b>${today.date}</b> <span class="tag tag-db">DB 情境二</span> E${idx+1} 半倉買入</div>`;
-                        }
-                        p.basePrice = 0; // 結算完成，清除基準價
-                    }
-                    
-                    // 開始新週期
-                    if (p.balance > 0) {
-                        p.basePrice = yesterdayClose;
-                        p.remainingDays = dbDays;
+        function runDBStrategy(priceData, totalCapital, poolCount, poolSize, dbDays, dbTarget, dbKO, dbAPR, shDays, shTarget, shAPR) {
+            let reserve = totalCapital - poolCount * poolSize;
+            let pools = Array(poolCount).fill(0).map((_, i) => ({
+                id: i + 1,
+                balance: poolSize,
+                active: true,
+                basePrice: 0,
+                daysLeft: 0
+            }));
+            let shPool = { eth: 0, cost: 0 };
+            let stats = { dbKO: 0, dbS1: 0, dbS2: 0, shSell: 0, totalEthBought: 0, totalEthCost: 0 };
+            let equityHistory = [];
+            let peakEquity = totalCapital;
+            let maxDrawdown = 0;
+            let logs = [];
+            
+            for (let day = 0; day < priceData.length; day++) {
+                const today = priceData[day];
+                const yesterday = day > 0 ? priceData[day - 1] : today;
+                
+                // SH 處理
+                if (shPool.eth > 0) {
+                    const shTargetPrice = shPool.cost * (1 + shTarget / 100);
+                    if (today.avg >= shTargetPrice) {
+                        const sellValue = shPool.eth * today.avg * (1 + shAPR / 100 / 365 * shDays);
+                        reserve += sellValue;
+                        stats.shSell++;
+                        logs.push({ day: today.date, type: 'SH', msg: `SH賣出 ${shPool.eth.toFixed(4)} ETH @ $${today.avg.toFixed(0)}` });
+                        shPool.eth = 0;
+                        shPool.cost = 0;
                     }
                 }
+                
+                // DB 統一結算 (所有池同一天)
+                const isSettlementDay = day % dbDays === 0 && day > 0;
+                
+                pools.forEach(p => {
+                    if (!p.active) {
+                        // 補充池
+                        if (reserve >= poolSize) {
+                            reserve -= poolSize;
+                            p.balance = poolSize;
+                            p.active = true;
+                            p.basePrice = yesterday.close;
+                            p.daysLeft = dbDays;
+                        }
+                        return;
+                    }
+                    
+                    if (isSettlementDay && p.basePrice > 0) {
+                        const targetPrice = p.basePrice * (1 - dbTarget / 100);
+                        const koPrice = p.basePrice * (1 + dbKO / 100);
+                        
+                        if (today.avg >= koPrice) {
+                            // KO 情境
+                            const interest = p.balance * (dbAPR / 100) * (dbDays / 365);
+                            p.balance += interest;
+                            stats.dbKO++;
+                            logs.push({ day: today.date, type: 'DB-KO', msg: `E${p.id} KO +$${interest.toFixed(0)} 利息` });
+                            p.basePrice = yesterday.close; // 重新投入
+                        } else if (today.avg <= targetPrice) {
+                            // S1 情境: 全轉 ETH
+                            const ethBought = p.balance / targetPrice;
+                            shPool.eth += ethBought;
+                            shPool.cost = targetPrice;
+                            stats.totalEthBought += ethBought;
+                            stats.totalEthCost += p.balance;
+                            stats.dbS1++;
+                            logs.push({ day: today.date, type: 'DB-S1', msg: `E${p.id} S1 買入 ${ethBought.toFixed(4)} ETH` });
+                            p.balance = 0;
+                            p.active = false;
+                        } else {
+                            // S2 情境: 一半
+                            const half = p.balance / 2;
+                            const ethBought = half / targetPrice;
+                            shPool.eth += ethBought;
+                            shPool.cost = targetPrice;
+                            stats.totalEthBought += ethBought;
+                            stats.totalEthCost += half;
+                            p.balance = half;
+                            stats.dbS2++;
+                            logs.push({ day: today.date, type: 'DB-S2', msg: `E${p.id} S2 半倉買入 ${ethBought.toFixed(4)} ETH` });
+                            p.basePrice = yesterday.close;
+                        }
+                    } else if (p.basePrice === 0) {
+                        p.basePrice = yesterday.close;
+                        p.daysLeft = dbDays;
+                    }
+                });
+                
+                const ethValue = shPool.eth * today.close;
+                const poolsValue = pools.reduce((s, p) => s + p.balance, 0);
+                const equity = reserve + poolsValue + ethValue;
+                
+                if (equity > peakEquity) peakEquity = equity;
+                const drawdown = (peakEquity - equity) / peakEquity * 100;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                
+                equityHistory.push({ day: today.date, equity, reserve, pools: poolsValue, eth: ethValue });
             }
-        });
+            
+            const finalEquity = equityHistory[equityHistory.length - 1].equity;
+            const avgCost = stats.totalEthBought > 0 ? stats.totalEthCost / stats.totalEthBought : 0;
+            const winRate = stats.dbKO + stats.dbS1 + stats.dbS2 > 0 ? 
+                (stats.dbKO / (stats.dbKO + stats.dbS1 + stats.dbS2) * 100).toFixed(1) : 0;
+            
+            return { finalEquity, equityHistory, maxDrawdown, avgCost, winRate, stats, logs, reserve, pools, shPool };
+        }
 
-        let ethValue = ethPool.amount * today.close;
-        let totalEquity = reserve + pools.reduce((sum, p) => sum + p.balance, 0) + ethValue;
-        equityHistory.push(totalEquity.toFixed(2));
-        dateLabels.push(today.date);
-        
-        document.getElementById('resEthPrice').innerText = '$' + today.avg.toFixed(2);
-        document.getElementById('resEthQty').innerText = ethPool.amount.toFixed(4);
-        document.getElementById('resTotal').innerText = '$' + totalEquity.toLocaleString(undefined, {maximumFractionDigits:0});
-        document.getElementById('resReserve').innerText = '$' + reserve.toLocaleString(undefined, {maximumFractionDigits:0});
-        document.getElementById('resETHPool').innerText = '$' + ethValue.toLocaleString(undefined, {maximumFractionDigits:0});
-        let totalInit = parseFloat(document.getElementById('initReserve').value) + (poolCount * poolInitSize);
-        document.getElementById('resROI').innerText = ((totalEquity - totalInit) / totalInit * 100).toFixed(2) + '%';
-    }
-    updateChart(dateLabels, equityHistory);
-    log.scrollTop = log.scrollHeight;
-}
+        function runBLStrategy(priceData, totalCapital, poolCount, poolSize, blDays, blDiscount, blAPR, shDays, shTarget, shAPR) {
+            let reserve = totalCapital - poolCount * poolSize;
+            let pools = Array(poolCount).fill(0).map((_, i) => ({
+                id: i + 1,
+                balance: poolSize,
+                active: true,
+                buyPrice: 0,
+                startDay: i // 錯開啟動
+            }));
+            let shPool = { eth: 0, cost: 0 };
+            let stats = { blHit: 0, blMiss: 0, shSell: 0, totalEthBought: 0, totalEthCost: 0 };
+            let equityHistory = [];
+            let peakEquity = totalCapital;
+            let maxDrawdown = 0;
+            let logs = [];
+            
+            for (let day = 0; day < priceData.length; day++) {
+                const today = priceData[day];
+                const yesterday = day > 0 ? priceData[day - 1] : today;
+                
+                // SH 處理
+                if (shPool.eth > 0) {
+                    const shTargetPrice = shPool.cost * (1 + shTarget / 100);
+                    if (today.avg >= shTargetPrice) {
+                        const sellValue = shPool.eth * today.avg * (1 + shAPR / 100 / 365 * shDays);
+                        reserve += sellValue;
+                        stats.shSell++;
+                        logs.push({ day: today.date, type: 'SH', msg: `SH賣出 ${shPool.eth.toFixed(4)} ETH` });
+                        shPool.eth = 0;
+                        shPool.cost = 0;
+                    }
+                }
+                
+                // BL 獨立結算 (各池錯開)
+                pools.forEach(p => {
+                    if (day < p.startDay) return; // 還沒到啟動日
+                    
+                    if (!p.active) {
+                        if (reserve >= poolSize) {
+                            reserve -= poolSize;
+                            p.balance = poolSize;
+                            p.active = true;
+                            p.buyPrice = yesterday.close * (1 - blDiscount / 100);
+                        }
+                        return;
+                    }
+                    
+                    if (p.buyPrice === 0) {
+                        p.buyPrice = yesterday.close * (1 - blDiscount / 100);
+                    }
+                    
+                    // 每日檢查是否觸發低買
+                    if (today.low <= p.buyPrice) {
+                        // 成交!
+                        const ethBought = p.balance / p.buyPrice;
+                        shPool.eth += ethBought;
+                        shPool.cost = p.buyPrice;
+                        stats.totalEthBought += ethBought;
+                        stats.totalEthCost += p.balance;
+                        stats.blHit++;
+                        logs.push({ day: today.date, type: 'BL-HIT', msg: `E${p.id} 成交買入 ${ethBought.toFixed(4)} ETH` });
+                        p.balance = 0;
+                        p.active = false;
+                    } else {
+                        // 未成交，累積利息
+                        const interest = p.balance * (blAPR / 100) / 365;
+                        p.balance += interest;
+                        if (day % 7 === 0) { // 每7天記錄一次
+                            logs.push({ day: today.date, type: 'BL-WAIT', msg: `E${p.id} 未成交 餘額 $${p.balance.toFixed(0)}` });
+                        }
+                    }
+                });
+                
+                const ethValue = shPool.eth * today.close;
+                const poolsValue = pools.reduce((s, p) => s + p.balance, 0);
+                const equity = reserve + poolsValue + ethValue;
+                
+                if (equity > peakEquity) peakEquity = equity;
+                const drawdown = (peakEquity - equity) / peakEquity * 100;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                
+                equityHistory.push({ day: today.date, equity, reserve, pools: poolsValue, eth: ethValue });
+            }
+            
+            const finalEquity = equityHistory[equityHistory.length - 1].equity;
+            const avgCost = stats.totalEthBought > 0 ? stats.totalEthCost / stats.totalEthBought : 0;
+            const hitRate = stats.blHit + stats.blMiss > 0 ? 
+                (stats.blHit / (stats.blHit + stats.blMiss) * 100).toFixed(1) : 0;
+            
+            return { finalEquity, equityHistory, maxDrawdown, avgCost, hitRate, stats, logs, reserve, pools, shPool };
+        }
 
-function updateChart(labels, data) {
-    const ctx = document.getElementById('mainChart').getContext('2d');
-    if (chartObj) chartObj.destroy();
-    chartObj = new Chart(ctx, {
-        type: 'line',
-        data: { labels: labels, datasets: [{ label: '資產價值', data: data, borderColor: '#f3ba2f', pointRadius: 0, fill: true, backgroundColor: 'rgba(243, 186, 47, 0.1)' }] },
-        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { display: false } } }
-    });
-}
-</script>
+        function runSimulation() {
+            const totalCapital = parseFloat(document.getElementById('totalCapital').value);
+            const poolCount = parseInt(document.getElementById('poolCount').value);
+            const poolSize = parseFloat(document.getElementById('poolSize').value);
+            const days = parseInt(document.getElementById('backtestDays').value);
+            
+            const dbDays = parseInt(document.getElementById('dbDays').value);
+            const dbTarget = parseFloat(document.getElementById('dbTarget').value);
+            const dbKO = parseFloat(document.getElementById('dbKO').value);
+            const dbAPR = parseFloat(document.getElementById('dbAPR').value);
+            
+            const blDays = parseInt(document.getElementById('blDays').value);
+            const blDiscount = parseFloat(document.getElementById('blDiscount').value);
+            const blAPR = parseFloat(document.getElementById('blAPR').value);
+            
+            const shDays = parseInt(document.getElementById('shDays').value);
+            const shTarget = parseFloat(document.getElementById('shTarget').value);
+            const shAPR = parseFloat(document.getElementById('shAPR').value);
+            
+            const priceData = generatePriceData(days);
+            
+            // 執行兩個策略
+            const dbResult = runDBStrategy(priceData, totalCapital, poolCount, poolSize, dbDays, dbTarget, dbKO, dbAPR, shDays, shTarget, shAPR);
+            const blResult = runBLStrategy(priceData, totalCapital, poolCount, poolSize, blDays, blDiscount, blAPR, shDays, shTarget, shAPR);
+            
+            // 更新 DB 結果
+            const dbROI = ((dbResult.finalEquity - totalCapital) / totalCapital * 100).toFixed(2);
+            document.getElementById('db-total').textContent = '$' + Math.round(dbResult.finalEquity).toLocaleString();
+            document.getElementById('db-total').className = 'stat-value ' + (dbROI >= 0 ? 'green' : 'red');
+            document.getElementById('db-roi').textContent = (dbROI >= 0 ? '+' : '') + dbROI + '%';
+            document.getElementById('db-reserve').textContent = '$' + Math.round(dbResult.reserve).toLocaleString();
+            document.getElementById('db-pools').textContent = '$' + Math.round(dbResult.pools.reduce((s, p) => s + p.balance, 0)).toLocaleString();
+            document.getElementById('db-eth').textContent = '$' + Math.round(dbResult.shPool.eth * priceData[priceData.length - 1].close).toLocaleString();
+            document.getElementById('db-cost').textContent = dbResult.avgCost > 0 ? '$' + dbResult.avgCost.toFixed(0) : '--';
+            document.getElementById('db-mdd').textContent = '-' + dbResult.maxDrawdown.toFixed(1) + '%';
+            document.getElementById('db-winrate').textContent = dbResult.winRate + '%';
+            
+            // 更新 BL 結果
+            const blROI = ((blResult.finalEquity - totalCapital) / totalCapital * 100).toFixed(2);
+            document.getElementById('bl-total').textContent = '$' + Math.round(blResult.finalEquity).toLocaleString();
+            document.getElementById('bl-total').className = 'stat-value ' + (blROI >= 0 ? 'green' : 'red');
+            document.getElementById('bl-roi').textContent = (blROI >= 0 ? '+' : '') + blROI + '%';
+            document.getElementById('bl-reserve').textContent = '$' + Math.round(blResult.reserve).toLocaleString();
+            document.getElementById('bl-pools').textContent = '$' + Math.round(blResult.pools.reduce((s, p) => s + p.balance, 0)).toLocaleString();
+            document.getElementById('bl-eth').textContent = '$' + Math.round(blResult.shPool.eth * priceData[priceData.length - 1].close).toLocaleString();
+            document.getElementById('bl-cost').textContent = blResult.avgCost > 0 ? '$' + blResult.avgCost.toFixed(0) : '--';
+            document.getElementById('bl-mdd').textContent = '-' + blResult.maxDrawdown.toFixed(1) + '%';
+            document.getElementById('bl-winrate').textContent = blResult.hitRate + '%';
+            
+            // 更新日誌
+            updateLog('db-log', dbResult.logs.slice(-20));
+            updateLog('bl-log', blResult.logs.slice(-20));
+            
+            // 繪製圖表
+            drawChart('dbChart', dbResult.equityHistory, 'DB+SH 資產曲線');
+            drawChart('blChart', blResult.equityHistory, 'BL+SH 資產曲線');
+        }
+
+        function updateLog(elementId, logs) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = logs.map(l => {
+                const tagClass = l.type.startsWith('DB') ? 'tag-db' : l.type.startsWith('BL') ? 'tag-bl' : 'tag-sh';
+                return `<div class="log-entry"><span class="tag ${tagClass}">${l.type}</span> ${l.day}: ${l.msg}</div>`;
+            }).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function drawChart(canvasId, data, label) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const isDB = canvasId === 'dbChart';
+            
+            if (window[canvasId + 'Chart']) {
+                window[canvasId + 'Chart'].destroy();
+            }
+            
+            window[canvasId + 'Chart'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.day),
+                    datasets: [{
+                        label: label,
+                        data: data.map(d => d.equity),
+                        borderColor: isDB ? '#00d9ff' : '#ff8c00',
+                        backgroundColor: isDB ? 'rgba(0, 217, 255, 0.1)' : 'rgba(255, 140, 0, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }, {
+                        label: '備用金',
+                        data: data.map(d => d.reserve),
+                        borderColor: '#ffc500',
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }, {
+                        label: 'ETH價值',
+                        data: data.map(d => d.eth),
+                        borderColor: '#ff4466',
+                        pointRadius: 0,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af', font: { family: 'Courier New' } } }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            ticks: { color: '#9ca3af', font: { family: 'Courier New' } },
+                            grid: { color: '#1f2937' }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
 </body>
 </html>
