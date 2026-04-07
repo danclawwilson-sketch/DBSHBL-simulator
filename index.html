@@ -114,10 +114,11 @@ function runDBA(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,sh
       action+=' | 結算:';
       for(let p of pools){
         let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);
+        let heldDays=day-p.startDay+1; // 實際持有天數
         if(td.avg>=kp){
-          let inx=p.balance*(apr/100)*(dbDays/365);
+          let inx=p.balance*(apr/100)*(heldDays/365);
           reserve+=p.balance+inx;
-          action+=' P'+p.id+'KO';
+          action+=' P'+p.id+'KO('+heldDays+'天)';
         }else if(td.avg<=tp){
           shETH+=p.balance/tp;
           shEntryDay=day;
@@ -163,10 +164,11 @@ function runDBB(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,sh
     for(let p of activePools){
       if(day-p.startDay>=dbDays){
         let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);
+        let heldDays=day-p.startDay; // 實際持有天數
         if(td.avg>=kp){
-          let inx=p.balance*(apr/100)*(dbDays/365);
+          let inx=p.balance*(apr/100)*(heldDays/365);
           reserve+=p.balance+inx;
-          action+=' P'+p.id+'KO';
+          action+=' P'+p.id+'KO('+heldDays+'天)';
         }else if(td.avg<=tp){
           shETH+=p.balance/tp;
           shEntryDay=day;
@@ -288,7 +290,7 @@ function drawChart(cid,data,color){
     type:'line',
     data:{labels:data.map((_,i)=>'D'+(i+1)),datasets:[{data:data,borderColor:color,backgroundColor:color+'20',fill:true,tension:.3,pointRadius:0}]},
     options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{ticks:{color:'#9ca3af',callback:v=>'$'+v/1000+'k'}}}}
-  });
+  );
 }
 window.onload=function(){
   console.log('Page loaded');
