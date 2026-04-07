@@ -240,6 +240,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;b
 </div>
 <div class="lp-run">
 <button class="btn-run" id="btnRun" onclick="startSimulation()">▶ 開始回測</button>
+<button class="btn-compare" id="btnMatrix" onclick="startMatrixSim()" style="margin-top:2px;">⊞ DB 矩陣比較</button>
 <div class="prog-wrap" id="progWrap" style="display:none;padding:8px 14px;">
 <div class="prog-bg"><div class="prog-fill" id="progBar"></div></div><div class="prog-text" id="progText">0%</div>
 </div>
@@ -419,6 +420,144 @@ function renderResults(side,priceData,res,initCapital){const{cDates,cEquity,cRes
 function renderLog(side,filter){const entries=_allLog[side]||[];if(!entries.length){document.getElementById(side+'-logWrap').innerHTML='<div style="color:var(--text);font-size:.72rem;padding:10px;">無記錄</div>';return;}const kw=filter.trim().toUpperCase();const show=kw?entries.filter(e=>e.badge.includes(kw)||e.msg.toUpperCase().includes(kw)||e.date.includes(kw)):entries;document.getElementById(side+'-logTitle').textContent=kw?`// LOG 篩選 "${filter}" → ${show.length} 筆`:`// LOG（${entries.length} 筆）`;document.getElementById(side+'-logWrap').innerHTML=show.map(e=>`<div class="log-entry"><span class="log-date">${e.date}</span><span class="log-badge ${e.bc}">${e.badge}</span><span class="log-msg">${e.msg}</span></div>`).join('');}
 function buildPoolStatus(side,pools,shPos,lastPrice,finalReserve){const grid=document.getElementById(side+'-poolsGrid');grid.innerHTML='';const isDB=side==='db';pools.forEach(p=>{const c=document.createElement('div');let cls='pool-card',badge,bc='badge-idle',val='--',sub='--';if(p.mode==='active'){cls+=' '+(isDB?'active':'bl-active');badge=isDB?'DB':'BL';bc=isDB?'badge-db':'badge-bl';val='$'+p.balance.toLocaleString(undefined,{maximumFractionDigits:0});sub=isDB?`${p.daysInProduct}天 TP:$${fmt(p.targetPrice,0)}`:`${p.daysInProduct}天 買@$${fmt(p.buyPrice,0)}`;}else if(p.mode==='empty'){cls+=' eth-mode';badge='WAIT→SH';bc='badge-sh';val='等補充';sub=p.refillDelay>0?`${p.refillDelay}天後`:finalReserve>=1000?'備用金足':'等備用金';}else{badge='WAIT';val='$'+p.balance.toLocaleString(undefined,{maximumFractionDigits:0});sub=`${p.startDelay}天後啟動`;}c.className=cls;c.innerHTML=`<div class="pc-id">P${p.id}</div><div class="pc-val">${val}</div><div class="pc-sub">${sub}</div><span class="pc-badge ${bc}">${badge}</span>`;grid.appendChild(c);});const c=document.createElement('div');if(shPos.length>0){const te=shPos.reduce((s,p)=>s+p.ethAmt,0),tv=Math.round(te*lastPrice),ak=shPos.reduce((s,p)=>s+p.koPrice,0)/shPos.length;c.className='pool-card eth-mode';c.innerHTML=`<div class="pc-id">SH 池</div><div class="pc-val">≈$${tv.toLocaleString()}</div><div class="pc-sub">ETH×${fmt(te,4)} | ${shPos.length}筆</div><div class="pc-sub">均KO $${fmt(ak,0)}</div><span class="pc-badge badge-sh">SELL HIGH</span>`;}else{c.className='pool-card idle';c.innerHTML=`<div class="pc-id">SH 池</div><div class="pc-val" style="color:var(--text)">無倉位</div><div class="pc-sub">--</div><span class="pc-badge badge-idle">IDLE</span>`;}grid.appendChild(c);}
 function buildSummary(side,s){const roi=(s.finalEquity-s.initCapital)/s.initCapital*100;const ann=roi/s.simDays*365;const ethChg=(s.lastClose-s.firstClose)/s.firstClose*100;const isDB=side==='db';let rows=[['回測天數',s.simDays+'天',''],['初始本金',fmtU(s.initCapital),''],['最終資產',fmtU(s.finalEquity),roi>=0?'green':'red'],['總報酬率',(roi>=0?'+':'')+fmt(roi)+'%',roi>=0?'green':'red'],['年化報酬率',(ann>=0?'+':'')+fmt(ann)+'%',ann>=0?'green':'red'],['最大回撤 MDD','-'+fmt(s.maxDrawdown)+'%','red'],['──','',''],['ETH 期初價','$'+fmt(s.firstClose,0),''],['ETH 期末價','$'+fmt(s.lastClose,0),''],['ETH 漲跌幅',(ethChg>=0?'+':'')+fmt(ethChg)+'%',ethChg>=0?'green':'red'],['ETH 累計買入',fmt(s.totalEthBought,4)+' ETH',''],['ETH 均買成本',s.avgCost>0?'$'+fmt(s.avgCost):'--',''],['ETH 倉位現值',fmtU(s.ethValFinal),''],['──','','']];if(isDB){const tDB=s.dbS1+s.dbS2+s.dbS3;rows=rows.concat([['DB 總結算',tDB+'次',''],['DB S1 (全倉買ETH)',s.dbS1+'次',''],['DB S2 (半倉買ETH)',s.dbS2+'次','yellow'],['DB S3 (KO拿息)',s.dbS3+'次','green'],['DB S3 勝率',tDB>0?fmt(s.dbS3/tDB*100)+'%':'--','green']]);}else{const tBL=s.blHit+s.blMiss;rows=rows.concat([['BL 總結算',tBL+'次',''],['BL 成交 (買ETH→SH)',s.blHit+'次','orange'],['BL 未成交 (拿息回池)',s.blMiss+'次','green'],['BL 成交率',tBL>0?fmt(s.blHit/tBL*100)+'%':'--','orange']]);}rows=rows.concat([['──','',''],['SH 成功賣出',s.shS2+'次','green'],['SH 展期',s.shS1+'次',''],['──','',''],['備用金餘額',fmtU(s.reserveFinal),'yellow'],[isDB?'DB水池總值':'BL水池總值',fmtU(s.poolsValFinal),'']]);document.getElementById(side+'-sumTable').innerHTML=`<tr><th>指標</th><th style="text-align:right">數值</th></tr>`+rows.map(([k,v,c])=>{if(k==='──')return`<tr><td colspan="2" style="padding:3px 8px;border-bottom:1px solid var(--border)"></td></tr>`;return`<tr><td>${k}</td><td class="num ${c}">${v}</td></tr>`;}).join('');}
+
+// ── MATRIX SIMULATION ──
+async function startMatrixSim(){
+ const priceData=window.priceData;
+ if(!priceData||!priceData.length){alert('請先執行一次回測載入價格資料');return;}
+ const btn=document.getElementById('btnMatrix');
+ btn.disabled=true;btn.textContent='⊞ 計算中...';
+ document.getElementById('progWrap').style.display='block';
+ const initCapital=parseFloat(document.getElementById('initCapital').value)||10000;
+ const poolSize=parseFloat(document.getElementById('poolSize').value)||1000;
+ const nPools=poolCount;
+ const dbDays=parseInt(document.getElementById('dbDays').value)||7;
+ const dbAPR=parseFloat(document.getElementById('dbAPR').value)/100;
+ const shDays=parseInt(document.getElementById('shDays').value)||1;
+ const shKOPct=parseFloat(document.getElementById('shKO').value)/100;
+ const shAPR=parseFloat(document.getElementById('shAPR').value)/100;
+ const targets=[1,1.5,2,2.5,3,3.5,4,4.5,5];
+ const userKO=parseFloat(document.getElementById('dbKO').value)||1;
+ const kos=[];
+ for(let v=0.5;v<userKO;v=Math.round((v+0.5)*10)/10) kos.push(Math.round(v*10)/10);
+ kos.push(Math.round(userKO*10)/10);
+ const results=[];
+ let done=0,total=targets.length*kos.length;
+ for(const tPct of targets){
+  const row=[];
+  for(const koPct of kos){
+   await new Promise(r=>setTimeout(r,0));
+   const res=runDBCore(priceData,initCapital,poolSize,nPools,dbDays,tPct/100,koPct/100,dbAPR,shDays,shKOPct,shAPR);
+   const finalEquity=res.cEquity[res.cEquity.length-1];
+   const roi=(finalEquity-initCapital)/initCapital*100;
+   row.push({finalEquity,roi,maxDrawdown:res.maxDrawdown,dbS1:res.dbS1,dbS2:res.dbS2,dbS3:res.dbS3,shS1:res.shS1,shS2:res.shS2});
+   done++;
+   document.getElementById('progText').textContent=`矩陣計算 ${done}/${total}...`;
+  }
+  results.push(row);
+ }
+ renderMatrix(results,targets,kos,initCapital,nPools,dbDays);
+ btn.disabled=false;btn.textContent='⊞ DB 矩陣比較';
+ document.getElementById('progWrap').style.display='none';
+ document.getElementById('progText').textContent='完成';
+}
+
+function runDBCore(priceData,initCapital,poolSize,nPools,dbDays,dbTargetPct,dbKOPct,dbAPR,shDays,shKOPct,shAPR){
+ let reserve=initCapital-nPools*poolSize;
+ if(reserve<0) return null;
+ let pools=Array(nPools).fill(0).map((_,idx)=>({id:idx+1,balance:poolSize,mode:'wait',startDelay:idx,daysInProduct:0,targetPrice:0,koPrice:0,refillDelay:0}));
+ let shPos=[],dbS1=0,dbS2=0,dbS3=0,shS1=0,shS2=0;
+ let peakEquity=initCapital,maxDrawdown=0,cEquity=[];
+ for(let i=0;i<priceData.length;i++){
+  const today=priceData[i],prevClose=i===0?today.open:priceData[i-1].close;
+  // SH
+  const nextSh=[];
+  for(const pos of shPos){
+   pos.cycleDays--;
+   if(pos.cycleDays>0){nextSh.push(pos);continue;}
+   const intEth=pos.ethAmt*(shAPR/365)*shDays,totalEth=pos.ethAmt+intEth;
+   if(today.price1600>=pos.koPrice){reserve+=totalEth*pos.koPrice;shS2++;}
+   else{nextSh.push({ethAmt:totalEth,koPrice:today.price1600*(1+shKOPct),cycleDays:shDays});shS1++;}
+  }
+  shPos=nextSh;
+  // DB
+  for(const p of pools){
+   if(p.mode==='wait'){if(p.startDelay>0){p.startDelay--;continue;}p.targetPrice=prevClose*(1-dbTargetPct);p.koPrice=prevClose*(1+dbKOPct);p.daysInProduct=0;p.mode='active';continue;}
+   if(p.mode==='empty'){if(p.refillDelay>0){p.refillDelay--;continue;}if(reserve>=poolSize){reserve-=poolSize;p.balance=poolSize;p.targetPrice=prevClose*(1-dbTargetPct);p.koPrice=prevClose*(1+dbKOPct);p.daysInProduct=0;p.mode='active';}continue;}
+   p.daysInProduct++;
+   if(p.daysInProduct<dbDays) continue;
+   const principal=p.balance,actualDays=p.daysInProduct,earned=principal*(dbAPR/365)*actualDays;
+   p.balance+=earned;
+   if(today.price1600>=p.koPrice){
+    dbS3++;
+    const sf=poolSize-p.balance;if(sf>0&&reserve>=sf){reserve-=sf;p.balance=poolSize;}
+    if(p.id===1){p.targetPrice=prevClose*(1-dbTargetPct);p.koPrice=prevClose*(1+dbKOPct);p.daysInProduct=0;p.mode='active';}
+    else{reserve+=p.balance;p.balance=0;p.mode='empty';p.refillDelay=Math.max(0,p.id-2);}
+   }else if(today.price1600<=p.targetPrice){
+    dbS1++;const ethBought=principal/p.targetPrice;
+    shPos.push({ethAmt:ethBought,koPrice:today.price1600*(1+shKOPct),cycleDays:shDays});p.balance=0;
+    if(p.id===1&&reserve>=poolSize){reserve-=poolSize;p.balance=poolSize;p.targetPrice=prevClose*(1-dbTargetPct);p.koPrice=prevClose*(1+dbKOPct);p.daysInProduct=0;p.mode='active';}
+    else{p.mode='empty';p.refillDelay=Math.max(0,p.id-2);}
+   }else{
+    dbS2++;const halfUsdt=principal/2,ethBought=halfUsdt/p.targetPrice;
+    shPos.push({ethAmt:ethBought,koPrice:today.price1600*(1+shKOPct),cycleDays:shDays});p.balance=halfUsdt;
+    if(p.id===1){const sf=poolSize-p.balance;if(sf>0&&reserve>=sf){reserve-=sf;p.balance=poolSize;}p.targetPrice=prevClose*(1-dbTargetPct);p.koPrice=prevClose*(1+dbKOPct);p.daysInProduct=0;p.mode='active';}
+    else{reserve+=p.balance;p.balance=0;p.mode='empty';p.refillDelay=Math.max(0,p.id-2);}
+   }
+  }
+  const ethQty=shPos.reduce((s,p)=>s+p.ethAmt,0),ethVal=ethQty*today.close,poolsVal=pools.reduce((s,p)=>s+p.balance,0),equity=reserve+poolsVal+ethVal;
+  if(equity>peakEquity)peakEquity=equity;
+  const dd=peakEquity>0?(peakEquity-equity)/peakEquity*100:0;
+  if(dd>maxDrawdown)maxDrawdown=dd;
+  cEquity.push(equity);
+ }
+ const finalEquity=cEquity[cEquity.length-1];
+ return{finalEquity,roi:(finalEquity-initCapital)/initCapital*100,maxDrawdown,dbS1,dbS2,dbS3,shS1,shS2,cEquity};
+}
+
+function renderMatrix(results,targets,kos,initCapital,nPools,dbDays){
+ const panel=document.getElementById('matrixPanel');
+ const allRoi=results.flat().filter(r=>r).map(r=>r.roi);
+ const minRoi=Math.min(...allRoi),maxRoi=Math.max(...allRoi);
+ function roiColor(roi){
+  const t=(roi-minRoi)/(maxRoi-minRoi||1);
+  if(t<0.5){const g=Math.round(t*2*180);return`rgba(255,${g},0,0.22)`;}
+  else{const r=Math.round((1-(t-0.5)*2)*255);return`rgba(${r},200,0,0.22)`;}
+ }
+ let h=`<div style="padding:10px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">`;
+ h+=`<span style="font-size:.65rem;letter-spacing:.2em;color:var(--accent);font-family:var(--mono);">// DB 矩陣回測 — 總資產結果</span>`;
+ h+=`<span style="font-size:.6rem;color:var(--text3);font-family:var(--mono);">初始本金 $${initCapital.toLocaleString()} · 水池 ${nPools} 個 · DB 週期 ${dbDays} 天</span>`;
+ h+=`<span style="font-size:.6rem;color:var(--text);font-family:var(--mono);">色彩：綠=高報酬 紅=低報酬</span>`;
+ h+=`</div>`;
+ h+=`<div style="overflow:auto;padding:12px 16px;">`;
+ h+=`<table style="border-collapse:collapse;font-family:var(--mono);font-size:.72rem;white-space:nowrap;">`;
+ h+=`<tr><th style="padding:7px 14px;color:var(--text);text-align:center;border-bottom:1px solid var(--border2);border-right:1px solid var(--border2);background:var(--s2);">KO → / Target ↓</th>`;
+ for(const t of targets){h+=`<th style="padding:7px 14px;color:var(--accent);text-align:center;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);background:var(--s2);">−${t}%</th>`;}
+ h+=`</tr>`;
+ for(let ki=0;ki<kos.length;ki++){
+  h+=`<tr>`;
+  h+=`<td style="padding:7px 14px;color:var(--text2);text-align:center;border-right:1px solid var(--border2);border-bottom:1px solid var(--border);background:var(--s2);font-weight:700;">+${kos[ki]}%</td>`;
+  for(let ti=0;ti<targets.length;ti++){
+   const r=results[ti][ki];
+   if(!r){h+=`<td style="padding:7px 14px;text-align:center;border-right:1px solid var(--border);border-bottom:1px solid var(--border);color:var(--text);">—</td>`;continue;}
+   const bg=roiColor(r.roi);
+   const roiC=r.roi>=0?'var(--accent)':'var(--red)';
+   const tDB=r.dbS1+r.dbS2+r.dbS3;
+   const s3wr=tDB>0?Math.round(r.dbS3/tDB*100):0;
+   h+=`<td style="padding:7px 14px;text-align:right;background:${bg};border-right:1px solid var(--border);border-bottom:1px solid var(--border);">`;
+   h+=`<div style="color:var(--text3);font-weight:700;">$${Math.round(r.finalEquity).toLocaleString()}</div>`;
+   h+=`<div style="color:${roiC};font-size:.65rem;">${r.roi>=0?'+':''}${r.roi.toFixed(1)}%</div>`;
+   h+=`<div style="color:var(--text);font-size:.6rem;">MDD -${r.maxDrawdown.toFixed(1)}% | S3 ${s3wr}%</div>`;
+   h+=`</td>`;
+  }
+  h+=`</tr>`;
+ }
+ h+=`</table></div>`;
+ panel.innerHTML=h;
+ panel.style.display='block';
+ panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 </script>
+<div id="matrixPanel" style="display:none;margin-top:3px;border:1px solid var(--border2);background:var(--s1);"></div>
 </body>
 </html>
