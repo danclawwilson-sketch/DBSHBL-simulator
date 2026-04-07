@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>DB-SH 雙管線飛輪模擬器 V2.5</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #f3ba2f; --bg: #181a20; --card: #2b3139; --text: #eaecef; --border: #474d57; }
+        body { font-family: "Segoe UI", Tahoma, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+        .panel { background: var(--card); padding: 20px; border-radius: 12px; height: fit-content; }
+        h2 { color: var(--primary); font-size: 1.3rem; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.8rem; color: #848e9c; margin-bottom: 4px; }
+        input { width: 100%; background: #12161c; border: 1px solid var(--border); color: white; padding: 8px; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; background: var(--primary); color: #000; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem; margin-top: 10px; }
+        button:hover { opacity: 0.9; }
+        .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        @media (min-width: 1000px) { .dashboard { grid-template-columns: repeat(6, 1fr); } }
+        .stat-card { background: var(--card); padding: 12px; border-radius: 10px; text-align: center; border: 1px solid var(--border); }
+        .stat-label { font-size: 0.7rem; color: #848e9c; margin-bottom: 4px; }
+        .stat-value { font-size: 1rem; font-weight: bold; color: var(--primary); }
+        .chart-container { background: var(--card); padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        .log-container { background: #12161c; padding: 15px; border-radius: 10px; height: 350px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 0.8rem; }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #2b3139; padding-bottom: 4px; }
+        .tag { padding: 2px 5px; border-radius: 4px; font-weight: bold; font-size: 0.7rem; margin-right: 5px; }
+        .tag-db { background: #2ebd85; color: white; }
+        .tag-sh { background: #f6465d; color: white; }
+        .tag-fill { background: #3c52e4; color: white; }
+        .tag-lock { background: #474d57; color: #ccc; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="panel">
+        <h2>策略參數設定</h2>
+        <div class="input-group"><label>初始備用金 (USDT)</label><input type="number" id="initReserve" value="7000"></div>
+        <div class="input-group"><label>USDT 水池數量 (E1-E8)</label><input type="number" id="poolCount" value="8"></div>
+        <div class="input-group"><label>單池初始金額 (USDT)</label><input type="number" id="poolSize" value="1000"></div>
+        
+        <h3 style="color: #2ebd85; font-size: 0.9rem;">DB 參數 (折價買幣)</h3>
+        <div class="input-group"><label>DB 天數 (結算週期)</label><input type="number" id="dbDays" value="1"></div>
+        <div class="input-group"><label>門檻價 KO (+%)</label><input type="number" id="dbKO" value="4.5"></div>
+        <div class="input-group"><label>目標買價 Target (-%)</label><input type="number" id="dbTarget" value="3.5"></div>
+        <div class="input-group"><label>保本年化 APR (%)</label><input type="number" id="dbAPR" value="30"></div>
+
+        <h3 style="color: #f6465d; font-size: 0.9rem;">SH 參數 (雙幣看漲)</h3>
+        <div class="input-group"><label>SH 天數</label><input type="number" id="shDays" value="1"></div>
+        <div class="input-group"><label>高賣目標價 (+%)</label><input type="number" id="shTarget" value="3"></div>
+        <div class="input-group"><label>高賣年化 APR (%)</label><input type="number" id="shAPR" value="187"></div>
+        <button onclick="startSimulation()">開始 365 天歷史回測</button>
+    </div>
+
+    <div>
+        <div class="dashboard">
+            <div class="stat-card"><div class="stat-label">ETH 當前均價</div><div id="resEthPrice" class="stat-value">--</div></div>
+            <div class="stat-card"><div class="stat-label">ETH Pool 數量</div><div id="resEthQty" class="stat-value">--</div></div>
+            <div class="stat-card"><div class="stat-label">總資產淨值</div><div id="resTotal" class="stat-value">--</div></div>
+            <div class="stat-card"><div class="stat-label">備用金庫餘額</div><div id="resReserve" class="stat-value">--</div></div>
+            <div class="stat-card"><div class="stat-label">ETH 倉位價值</div><div id="resETHPool" class="stat-value">--</div></div>
+            <div class="stat-card"><div class="stat-label">總報酬率</div><div id="resROI" class="stat-value">--</div></div>
+        </div>
+        <div class="chart-container"><canvas id="mainChart"></canvas></div>
+        <div class="panel">
+            <h3>策略日誌 (DB-SH 運作明細)</h3>
+            <div id="logConsole" class="log-container">等待操作...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+let chartObj = null;
+
+async function startSimulation() {
+    const log = document.getElementById('logConsole');
+    log.innerHTML = "正在獲取幣安數據...";
+
+    let priceData = [];
+    try {
+        const response = await fetch('https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1d&limit=365');
+        const data = await response.json();
+        priceData = data.map(d => ({
+            date: new Date(d[0]).toLocaleDateString(),
+            open: parseFloat(d[1]), high: parseFloat(d[2]), low: parseFloat(d[3]), close: parseFloat(d[4]),
+            avg: (parseFloat(d[2]) + parseFloat(d[3]) + parseFloat(d[4])) / 3
+        }));
+    } catch (e) { log.innerHTML = "失敗: " + e; return; }
+
+    let reserve = parseFloat(document.getElementById('initReserve').value);
+    let poolCount = parseInt(document.getElementById('poolCount').value);
+    let poolInitSize = parseFloat(document.getElementById('poolSize').value);
+    
+    // 初始化水池，加入剩餘天數與基準價追蹤
+    let pools = Array(poolCount).fill(0).map(() => ({ 
+        balance: poolInitSize, 
+        remainingDays: 0, 
+        basePrice: 0 
+    }));
+    let ethPool = { amount: 0, cost: 0, remainingDays: 0 };
+    
+    const dbDays = parseInt(document.getElementById('dbDays').value);
+    const dbKO_pct = parseFloat(document.getElementById('dbKO').value) / 100;
+    const dbTarget_pct = parseFloat(document.getElementById('dbTarget').value) / 100;
+    const dbAPR = parseFloat(document.getElementById('dbAPR').value) / 100;
+
+    const shDays = parseInt(document.getElementById('shDays').value);
+    const shTarget_pct = parseFloat(document.getElementById('shTarget').value) / 100;
+    const shAPR = parseFloat(document.getElementById('shAPR').value) / 100;
+
+    let equityHistory = [];
+    let dateLabels = [];
+    log.innerHTML = "";
+
+    for (let i = 0; i < priceData.length; i++) {
+        let today = priceData[i];
+        let yesterdayClose = (i === 0) ? today.open : priceData[i-1].close;
+
+        // --- 1. SH 策略處理 ---
+        if (ethPool.amount > 0) {
+            if (ethPool.remainingDays > 0) {
+                ethPool.remainingDays--;
+            }
+            if (ethPool.remainingDays === 0) {
+                let shTargetPrice = ethPool.cost * (1 + shTarget_pct);
+                if (today.avg >= shTargetPrice) {
+                    let finalUSDT = ethPool.amount * shTargetPrice * (1 + (shAPR / 365 * shDays));
+                    reserve += finalUSDT;
+                    log.innerHTML += `<div class="log-entry"><b>${today.date}</b> <span class="tag tag-sh">SH 結算賣出</span> 匯入備用金 $${finalUSDT.toFixed(2)}</div>`;
+                    ethPool.amount = 0; ethPool.cost = 0;
+                } else {
+                    ethPool.amount *= (1 + (shAPR / 365 * shDays));
+                    ethPool.remainingDays = shDays; // 重新掛單
+                }
+            }
+        }
+
+        // --- 2. DB 策略處理 ---
+        pools.forEach((p, idx) => {
+            // 如果水池空了或金額不足，補血
+            if (p.balance < poolInitSize && p.remainingDays === 0) {
+                let diff = poolInitSize - p.balance;
+                if (reserve >= diff) { reserve -= diff; p.balance = poolInitSize; }
+            }
+
+            if (p.balance > 0) {
+                if (p.remainingDays > 0) {
+                    p.remainingDays--; // 鎖定中
+                } else {
+                    // 結算日判斷 (如果是剛開始或是剛結束一個週期)
+                    if (p.basePrice > 0) {
+                        let koPrice = p.basePrice * (1 + dbKO_pct);
+                        let targetPrice = p.basePrice * (1 - dbTarget_pct);
+
+                        if (today.avg >= koPrice) {
+                            p.balance *= (1 + (dbAPR / 365 * dbDays));
+                        } else if (today.avg <= targetPrice) {
+                            let ethBought = p.balance / targetPrice;
+                            ethPool.amount += ethBought; ethPool.cost = targetPrice;
+                            ethPool.remainingDays = shDays; p.balance = 0;
+                            log.innerHTML += `<div class="log-entry"><b>${today.date}</b> <span class="tag tag-db">DB 情境一</span> E${idx+1} 買入 ETH</div>`;
+                        } else {
+                            let halfUSDT = p.balance / 2;
+                            let ethBought = halfUSDT / targetPrice;
+                            ethPool.amount += ethBought; ethPool.cost = targetPrice;
+                            ethPool.remainingDays = shDays; p.balance = halfUSDT;
+                            log.innerHTML += `<div class="log-entry"><b>${today.date}</b> <span class="tag tag-db">DB 情境二</span> E${idx+1} 半倉買入</div>`;
+                        }
+                        p.basePrice = 0; // 結算完成，清除基準價
+                    }
+                    
+                    // 開始新週期
+                    if (p.balance > 0) {
+                        p.basePrice = yesterdayClose;
+                        p.remainingDays = dbDays;
+                    }
+                }
+            }
+        });
+
+        let ethValue = ethPool.amount * today.close;
+        let totalEquity = reserve + pools.reduce((sum, p) => sum + p.balance, 0) + ethValue;
+        equityHistory.push(totalEquity.toFixed(2));
+        dateLabels.push(today.date);
+        
+        document.getElementById('resEthPrice').innerText = '$' + today.avg.toFixed(2);
+        document.getElementById('resEthQty').innerText = ethPool.amount.toFixed(4);
+        document.getElementById('resTotal').innerText = '$' + totalEquity.toLocaleString(undefined, {maximumFractionDigits:0});
+        document.getElementById('resReserve').innerText = '$' + reserve.toLocaleString(undefined, {maximumFractionDigits:0});
+        document.getElementById('resETHPool').innerText = '$' + ethValue.toLocaleString(undefined, {maximumFractionDigits:0});
+        let totalInit = parseFloat(document.getElementById('initReserve').value) + (poolCount * poolInitSize);
+        document.getElementById('resROI').innerText = ((totalEquity - totalInit) / totalInit * 100).toFixed(2) + '%';
+    }
+    updateChart(dateLabels, equityHistory);
+    log.scrollTop = log.scrollHeight;
+}
+
+function updateChart(labels, data) {
+    const ctx = document.getElementById('mainChart').getContext('2d');
+    if (chartObj) chartObj.destroy();
+    chartObj = new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: [{ label: '資產價值', data: data, borderColor: '#f3ba2f', pointRadius: 0, fill: true, backgroundColor: 'rgba(243, 186, 47, 0.1)' }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { display: false } } }
+    });
+}
+</script>
+</body>
+</html>
