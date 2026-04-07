@@ -1,1 +1,299 @@
-<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DB+SH vs BL+SH V3</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>:root{--bg:#0a0e17;--card:#111827;--border:#1f2937;--accent:#00d9ff;--accent2:#00ff88;--orange:#ff8c00;--text:#e5e7eb;--red:#ff4466}*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:20px;min-height:100vh}.header{text-align:center;padding:20px;border-bottom:1px solid var(--border);margin-bottom:20px}.container{display:grid;grid-template-columns:340px 1fr;gap:20px;max-width:1800px;margin:0 auto}.panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px}.input-group{margin-bottom:12px}.input-group label{display:block;font-size:.75rem;color:#9ca3af;margin-bottom:5px}.input-group input,.input-group select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:4px}.toggle-group{display:flex;gap:8px;margin-bottom:12px}.toggle-btn{flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);cursor:pointer;border-radius:4px;font-size:.85rem}.toggle-btn.active{background:var(--accent);color:#000}.btn{width:100%;background:var(--accent);color:#000;border:none;padding:12px;border-radius:4px;font-weight:bold;cursor:pointer;margin-top:10px}.results{display:grid;grid-template-columns:1fr 1fr;gap:20px}.result-col{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px}.result-col.db-col{border-top:3px solid var(--accent)}.result-col.bl-col{border-top:3px solid var(--orange)}.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px}.stat-card{background:var(--bg);padding:12px;border-radius:6px;border:1px solid var(--border)}.stat-label{font-size:.7rem;color:#9ca3af}.stat-value{font-size:1.1rem;font-weight:bold}.green{color:var(--accent2)}.red{color:#ff4466}@media(max-width:1200px){.container{grid-template-columns:1fr}.results{grid-template-columns:1fr}}</style></head><body><div class="header"><h1>◈ DB+SH vs BL+SH 策略模擬器 V3</h1></div><div class="container"><div class="panel"><h3>⚙ 參數設定</h3><div class="input-group"><label>初始總資金</label><input type="number" id="totalCapital" value="10000"></div><div class="input-group"><label>水池數量</label><input type="number" id="poolCount" value="6"></div><div class="input-group"><label>每池金額</label><input type="number" id="poolSize" value="1000"></div><hr style="border-color:var(--border);margin:15px 0"><h4 style="color:var(--accent)">組合一: DB + SH</h4><label style="font-size:.8rem;color:#9ca3af">DB模式</label><div class="toggle-group"><button class="toggle-btn active" id="dbModeA" onclick="setDBMode('A')">單日結算</button><button class="toggle-btn" id="dbModeB" onclick="setDBMode('B')">每日投入</button></div><div class="input-group"><label>DB週期天數</label><input type="number" id="dbDays" value="7"></div><div class="input-group"><label>Target (-%)</label><input type="number" id="dbTarget" value="4.5" step="0.1"></div><div class="input-group"><label>KO (+%)</label><input type="number" id="dbKO" value="1" step="0.1"></div><div class="input-group"><label>DB APR (%)</label><input type="number" id="dbAPR" value="30"></div><hr style="border-color:var(--border);margin:15px 0"><h4 style="color:var(--orange)">組合二: BL + SH</h4><div class="input-group"><label>BL週期天數 (持有上限)</label><input type="number" id="blDays" value="7"></div><div class="input-group"><label>低買折扣 (-%)</label><input type="number" id="blDiscount" value="44"></div><div class="input-group"><label>BL APR (%)</label><input type="number" id="blAPR" value="333"></div><hr style="border-color:var(--border);margin:15px 0"><h4 style="color:var(--red)">SH 參數 (兩組獨立)</h4><div class="input-group"><label>SH目標 (+%)</label><input type="number" id="shTarget" value="3"></div><div class="input-group"><label>SH APR (%)</label><input type="number" id="shAPR" value="350"></div><div class="input-group"><label>SH週期天數 (T+N)</label><input type="number" id="shDays" value="1"></div><div class="input-group"><label>回測天數</label><select id="backtestDays"><option value="14">14天</option><option value="30">30天</option><option value="90">90天</option><option value="365" selected>365天</option></select></div><button class="btn" onclick="runSimulation()">▶ 開始回測</button></div><div class="results"><div class="result-col db-col"><h3 style="color:var(--accent)">組合一: DB + SH</h3><div class="stats-grid"><div class="stat-card"><div class="stat-label">總資產</div><div class="stat-value" id="db-total">--</div></div><div class="stat-card"><div class="stat-label">ROI</div><div class="stat-value" id="db-roi">--</div></div><div class="stat-card"><div class="stat-label">DB-SH持倉</div><div class="stat-value" id="db-eth">--</div></div><div class="stat-card"><div class="stat-label">備用金</div><div class="stat-value" id="db-reserve">--</div></div></div><canvas id="dbChart" height="120"></canvas></div><div class="result-col bl-col"><h3 style="color:var(--orange)">組合二: BL + SH</h3><div class="stats-grid"><div class="stat-card"><div class="stat-label">總資產</div><div class="stat-value" id="bl-total">--</div></div><div class="stat-card"><div class="stat-label">ROI</div><div class="stat-value" id="bl-roi">--</div></div><div class="stat-card"><div class="stat-label">BL-SH持倉</div><div class="stat-value" id="bl-eth">--</div></div><div class="stat-card"><div class="stat-label">進行中池</div><div class="stat-value" id="bl-pools">--</div></div></div><canvas id="blChart" height="120"></canvas></div></div></div><script>let dbMode='A';function setDBMode(m){dbMode=m;document.getElementById('dbModeA').classList.toggle('active',m==='A');document.getElementById('dbModeB').classList.toggle('active',m==='B')}function genPrice(d){let p=2000,r=[];for(let i=0;i<d;i++){p*=(1+(Math.random()-.5)*.08);r.push({date:'Day'+(i+1),open:p*.995,high:p*1.025,low:p*.975,close:p,avg:p})}return r}function runDBA(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,shAPR,shDays){let reserve=capital,pools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;for(let day=0;day<data.length;day++){let td=data[day],action='';if(day<poolCount&&reserve>=poolSize){reserve-=poolSize;pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action=`P${day+1}投入`}if(day===dbDays-1&&pools.length>0){action+=' | 結算:';for(let p of pools){let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);if(td.avg>=kp){let inx=p.balance*(apr/100)*(dbDays/365);reserve+=p.balance+inx;action+=` P${p.id}KO`}else if(td.avg<=tp){shETH+=p.balance/tp;shEntryDay=day;action+=` P${p.id}S1`}else{let hf=p.balance/2;shETH+=hf/tp;reserve+=hf;action+=` P${p.id}S2`}}pools=[];if(reserve>=poolSize){reserve-=poolSize;pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action+=` | P${nextId-1}再投入`}}if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);if(td.avg>=stp){reserve+=shETH*td.avg*(1+shAPR/100*shDays);action+=` | SH賣出${shETH.toFixed(3)}ETH`;shETH=0;shEntryDay=-1}}let ev=shETH*td.close,pv=pools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;equityHistory.push(tl)}return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve}}function runDBB(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,shAPR,shDays){let reserve=capital,activePools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;for(let day=0;day<data.length;day++){let td=data[day],action='';if(activePools.length<poolCount&&reserve>=poolSize){reserve-=poolSize;activePools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action=`P${nextId-1}投入`}let remaining=[];for(let p of activePools){if(day-p.startDay>=dbDays){let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);if(td.avg>=kp){let inx=p.balance*(apr/100)*(dbDays/365);reserve+=p.balance+inx;action+=` P${p.id}KO`}else if(td.avg<=tp){shETH+=p.balance/tp;shEntryDay=day;action+=` P${p.id}S1`}else{let hf=p.balance/2;shETH+=hf/tp;reserve+=hf;action+=` P${p.id}S2`}if(reserve>=poolSize){reserve-=poolSize;remaining.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action+=`→P${nextId-1}`}}else remaining.push(p)}activePools=remaining;if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);if(td.avg>=stp){reserve+=shETH*td.avg*(1+shAPR/100*shDays);action+=` | SH賣出${shETH.toFixed(3)}ETH`;shETH=0;shEntryDay=-1}}let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;equityHistory.push(tl)}return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve}}function runBL(data,capital,poolCount,poolSize,blDays,discount,apr,shTarget,shAPR,shDays){let reserve=capital,activePools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;for(let day=0;day<data.length;day++){let td=data[day],action='';if(activePools.length<poolCount&&reserve>=poolSize){reserve-=poolSize;let bp=td.close*(1-discount/100);activePools.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:bp});action=`E${nextId-1}投入($${bp.toFixed(0)})`}let remaining=[];for(let p of activePools){let expired=day-p.startDay>=blDays,triggered=td.low<=p.buyPrice;if(triggered){let eb=p.balance/p.buyPrice;shETH+=eb;shEntryDay=day;action+=` | E${p.id}成交→${eb.toFixed(3)}ETH`;if(reserve>=poolSize){reserve-=poolSize;let nb=td.close*(1-discount/100);remaining.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:nb});action+=`→E${nextId-1}補充`}}else if(expired){reserve+=p.balance;action+=` | E${p.id}到期返還`}else{p.balance*=(1+apr/100/365);remaining.push(p)}}activePools=remaining;if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){let ti=capital-reserve,ac=shETH>0?ti/shETH:td.close*(1-discount/100),stp=ac*(1+shTarget/100);if(td.avg>=stp){reserve+=shETH*td.avg*(1+shAPR/100*shDays);action+=` | SH賣出${shETH.toFixed(3)}ETH`;shETH=0;shEntryDay=-1}}let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;equityHistory.push(tl)}return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve,poolCount:activePools.length}}function runSimulation(){let capital=parseFloat(document.getElementById('totalCapital').value),poolCount=parseInt(document.getElementById('poolCount').value),poolSize=parseFloat(document.getElementById('poolSize').value),days=parseInt(document.getElementById('backtestDays').value),dbDays=parseInt(document.getElementById('dbDays').value),dbTarget=parseFloat(document.getElementById('dbTarget').value),dbKO=parseFloat(document.getElementById('dbKO').value),dbAPR=parseFloat(document.getElementById('dbAPR').value),blDays=parseInt(document.getElementById('blDays').value)||7,blDiscount=parseFloat(document.getElementById('blDiscount').value),blAPR=parseFloat(document.getElementById('blAPR').value),shTarget=parseFloat(document.getElementById('shTarget').value),shAPR=parseFloat(document.getElementById('shAPR').value),shDays=parseInt(document.getElementById('shDays').value)||1,priceData=genPrice(days),dbResult=dbMode==='A'?runDBA(priceData,capital,poolCount,poolSize,dbDays,dbTarget,dbKO,dbAPR,shTarget,shAPR,shDays):runDBB(priceData,capital,poolCount,poolSize,dbDays,dbTarget,dbKO,dbAPR,shTarget,shAPR,shDays),blResult=runBL(priceData,capital,poolCount,poolSize,blDays,blDiscount,blAPR,shTarget,shAPR,shDays),dbROI=((dbResult.finalEquity-capital)/capital*100).toFixed(2);document.getElementById('db-total').textContent='$'+Math.round(dbResult.finalEquity).toLocaleString();document.getElementById('db-total').className='stat-value '+(dbROI>=0?'green':'red');document.getElementById('db-roi').textContent=(dbROI>=0?'+':'')+dbROI+'%';document.getElementById('db-eth').textContent=dbResult.shETH.toFixed(4)+' ETH';document.getElementById('db-reserve').textContent='$'+Math.round(dbResult.reserve).toLocaleString();let blROI=((blResult.finalEquity-capital)/capital*100).toFixed(2);document.getElementById('bl-total').textContent='$'+Math.round(blResult.finalEquity).toLocaleString();document.getElementById('bl-total').className='stat-value '+(blROI>=0?'green':'red');document.getElementById('bl-roi').textContent=(blROI>=0?'+':'')+blROI+'%';document.getElementById('bl-eth').textContent=blResult.shETH.toFixed(4)+' ETH';document.getElementById('bl-pools').textContent=blResult.poolCount+' 個';drawChart('dbChart',dbResult.equityHistory,'#00d9ff');drawChart('blChart',blResult.equityHistory,'#ff8c00')}function drawChart(cid,data,color){let ctx=document.getElementById(cid).getContext('2d');if(window[cid+'C'])window[cid+'C'].destroy();window[cid+'C']=new Chart(ctx,{type:'line',data:{labels:data.map((_,i)=>'D'+(i+1)),datasets:[{data:data,borderColor:color,backgroundColor:color+'20',fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{ticks:{color:'#9ca3af',callback:v=>'$'+v/1000+'k'}}}})}runSimulation()</script></body></html>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DB+SH vs BL+SH 策略模擬器 V3</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--bg:#0a0e17;--card:#111827;--border:#1f2937;--accent:#00d9ff;--accent2:#00ff88;--orange:#ff8c00;--text:#e5e7eb;--red:#ff4466}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:20px;min-height:100vh}
+.header{text-align:center;padding:20px;border-bottom:1px solid var(--border);margin-bottom:20px}
+.container{display:grid;grid-template-columns:340px 1fr;gap:20px;max-width:1800px;margin:0 auto}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px}
+.input-group{margin-bottom:12px}
+.input-group label{display:block;font-size:.75rem;color:#9ca3af;margin-bottom:5px}
+.input-group input,.input-group select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:4px}
+.toggle-group{display:flex;gap:8px;margin-bottom:12px}
+.toggle-btn{flex:1;padding:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);cursor:pointer;border-radius:4px;font-size:.85rem}
+.toggle-btn.active{background:var(--accent);color:#000}
+.btn{width:100%;background:var(--accent);color:#000;border:none;padding:12px;border-radius:4px;font-weight:bold;cursor:pointer;margin-top:10px}
+.results{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.result-col{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px}
+.result-col.db-col{border-top:3px solid var(--accent)}
+.result-col.bl-col{border-top:3px solid var(--orange)}
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px}
+.stat-card{background:var(--bg);padding:12px;border-radius:6px;border:1px solid var(--border)}
+.stat-label{font-size:.7rem;color:#9ca3af}
+.stat-value{font-size:1.1rem;font-weight:bold}
+.green{color:var(--accent2)}.red{color:#ff4466}
+@media(max-width:1200px){.container{grid-template-columns:1fr}.results{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="header"><h1>◈ DB+SH vs BL+SH 策略模擬器 V3</h1></div>
+<div class="container">
+<div class="panel">
+<h3>⚙ 參數設定</h3>
+<div class="input-group"><label>初始總資金</label><input type="number" id="totalCapital" value="10000"></div>
+<div class="input-group"><label>水池數量</label><input type="number" id="poolCount" value="6"></div>
+<div class="input-group"><label>每池金額</label><input type="number" id="poolSize" value="1000"></div>
+<hr style="border-color:var(--border);margin:15px 0">
+<h4 style="color:var(--accent)">組合一: DB + SH</h4>
+<label style="font-size:.8rem;color:#9ca3af">DB模式</label>
+<div class="toggle-group">
+<button class="toggle-btn active" id="dbModeA" onclick="setDBMode('A')">單日結算</button>
+<button class="toggle-btn" id="dbModeB" onclick="setDBMode('B')">每日投入</button>
+</div>
+<div class="input-group"><label>DB週期天數</label><input type="number" id="dbDays" value="7"></div>
+<div class="input-group"><label>Target (-%)</label><input type="number" id="dbTarget" value="4.5" step="0.1"></div>
+<div class="input-group"><label>KO (+%)</label><input type="number" id="dbKO" value="1" step="0.1"></div>
+<div class="input-group"><label>DB APR (%)</label><input type="number" id="dbAPR" value="30"></div>
+<hr style="border-color:var(--border);margin:15px 0">
+<h4 style="color:var(--orange)">組合二: BL + SH</h4>
+<div class="input-group"><label>BL週期天數 (持有上限)</label><input type="number" id="blDays" value="7"></div>
+<div class="input-group"><label>低買折扣 (-%)</label><input type="number" id="blDiscount" value="44"></div>
+<div class="input-group"><label>BL APR (%)</label><input type="number" id="blAPR" value="333"></div>
+<hr style="border-color:var(--border);margin:15px 0">
+<h4 style="color:var(--red)">SH 參數 (兩組獨立)</h4>
+<div class="input-group"><label>SH目標 (+%)</label><input type="number" id="shTarget" value="3"></div>
+<div class="input-group"><label>SH APR (%)</label><input type="number" id="shAPR" value="350"></div>
+<div class="input-group"><label>SH週期天數 (T+N)</label><input type="number" id="shDays" value="1"></div>
+<div class="input-group"><label>回測天數</label><select id="backtestDays"><option value="14">14天</option><option value="30">30天</option><option value="90">90天</option><option value="365" selected>365天</option></select></div>
+<button class="btn" onclick="runSimulation()">▶ 開始回測</button>
+</div>
+<div class="results">
+<div class="result-col db-col">
+<h3 style="color:var(--accent)">組合一: DB + SH</h3>
+<div class="stats-grid">
+<div class="stat-card"><div class="stat-label">總資產</div><div class="stat-value" id="db-total">--</div></div>
+<div class="stat-card"><div class="stat-label">ROI</div><div class="stat-value" id="db-roi">--</div></div>
+<div class="stat-card"><div class="stat-label">DB-SH持倉</div><div class="stat-value" id="db-eth">--</div></div>
+<div class="stat-card"><div class="stat-label">備用金</div><div class="stat-value" id="db-reserve">--</div></div>
+</div>
+<canvas id="dbChart" height="120"></canvas>
+</div>
+<div class="result-col bl-col">
+<h3 style="color:var(--orange)">組合二: BL + SH</h3>
+<div class="stats-grid">
+<div class="stat-card"><div class="stat-label">總資產</div><div class="stat-value" id="bl-total">--</div></div>
+<div class="stat-card"><div class="stat-label">ROI</div><div class="stat-value" id="bl-roi">--</div></div>
+<div class="stat-card"><div class="stat-label">BL-SH持倉</div><div class="stat-value" id="bl-eth">--</div></div>
+<div class="stat-card"><div class="stat-label">進行中池</div><div class="stat-value" id="bl-pools">--</div></div>
+</div>
+<canvas id="blChart" height="120"></canvas>
+</div>
+</div>
+</div>
+<script>
+let dbMode='A';
+function setDBMode(m){
+  dbMode=m;
+  document.getElementById('dbModeA').classList.toggle('active',m==='A');
+  document.getElementById('dbModeB').classList.toggle('active',m==='B');
+}
+function genPrice(d){
+  let p=2000,r=[];
+  for(let i=0;i<d;i++){
+    p*=(1+(Math.random()-.5)*.08);
+    r.push({date:'Day'+(i+1),open:p*.995,high:p*1.025,low:p*.975,close:p,avg:p});
+  }
+  return r;
+}
+function runDBA(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,shAPR,shDays){
+  let reserve=capital,pools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;
+  for(let day=0;day<data.length;day++){
+    let td=data[day],action='';
+    if(day<poolCount&&reserve>=poolSize){
+      reserve-=poolSize;
+      pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
+      action='P'+(day+1)+'投入';
+    }
+    if(day===dbDays-1&&pools.length>0){
+      action+=' | 結算:';
+      for(let p of pools){
+        let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);
+        if(td.avg>=kp){
+          let inx=p.balance*(apr/100)*(dbDays/365);
+          reserve+=p.balance+inx;
+          action+=' P'+p.id+'KO';
+        }else if(td.avg<=tp){
+          shETH+=p.balance/tp;
+          shEntryDay=day;
+          action+=' P'+p.id+'S1';
+        }else{
+          let hf=p.balance/2;
+          shETH+=hf/tp;
+          reserve+=hf;
+          action+=' P'+p.id+'S2';
+        }
+      }
+      pools=[];
+      if(reserve>=poolSize){
+        reserve-=poolSize;
+        pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
+        action+=' | P'+(nextId-1)+'再投入';
+      }
+    }
+    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){
+      let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);
+      if(td.avg>=stp){
+        reserve+=shETH*td.avg*(1+shAPR/100*shDays);
+        action+=' | SH賣出'+shETH.toFixed(3)+'ETH';
+        shETH=0;
+        shEntryDay=-1;
+      }
+    }
+    let ev=shETH*td.close,pv=pools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;
+    equityHistory.push(tl);
+  }
+  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve};
+}
+function runDBB(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,shAPR,shDays){
+  let reserve=capital,activePools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;
+  for(let day=0;day<data.length;day++){
+    let td=data[day],action='';
+    if(activePools.length<poolCount&&reserve>=poolSize){
+      reserve-=poolSize;
+      activePools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
+      action='P'+(nextId-1)+'投入';
+    }
+    let remaining=[];
+    for(let p of activePools){
+      if(day-p.startDay>=dbDays){
+        let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);
+        if(td.avg>=kp){
+          let inx=p.balance*(apr/100)*(dbDays/365);
+          reserve+=p.balance+inx;
+          action+=' P'+p.id+'KO';
+        }else if(td.avg<=tp){
+          shETH+=p.balance/tp;
+          shEntryDay=day;
+          action+=' P'+p.id+'S1';
+        }else{
+          let hf=p.balance/2;
+          shETH+=hf/tp;
+          reserve+=hf;
+          action+=' P'+p.id+'S2';
+        }
+        if(reserve>=poolSize){
+          reserve-=poolSize;
+          remaining.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
+          action+='→P'+(nextId-1);
+        }
+      }else remaining.push(p);
+    }
+    activePools=remaining;
+    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){
+      let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);
+      if(td.avg>=stp){
+        reserve+=shETH*td.avg*(1+shAPR/100*shDays);
+        action+=' | SH賣出'+shETH.toFixed(3)+'ETH';
+        shETH=0;
+        shEntryDay=-1;
+      }
+    }
+    let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;
+    equityHistory.push(tl);
+  }
+  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve};
+}
+function runBL(data,capital,poolCount,poolSize,blDays,discount,apr,shTarget,shAPR,shDays){
+  let reserve=capital,activePools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;
+  for(let day=0;day<data.length;day++){
+    let td=data[day],action='';
+    if(activePools.length<poolCount&&reserve>=poolSize){
+      reserve-=poolSize;
+      let bp=td.close*(1-discount/100);
+      activePools.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:bp});
+      action='E'+(nextId-1)+'投入($'+bp.toFixed(0)+')';
+    }
+    let remaining=[];
+    for(let p of activePools){
+      let expired=day-p.startDay>=blDays,triggered=td.low<=p.buyPrice;
+      if(triggered){
+        let eb=p.balance/p.buyPrice;
+        shETH+=eb;
+        shEntryDay=day;
+        action+=' | E'+p.id+'成交→'+eb.toFixed(3)+'ETH';
+        if(reserve>=poolSize){
+          reserve-=poolSize;
+          let nb=td.close*(1-discount/100);
+          remaining.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:nb});
+          action+='→E'+(nextId-1)+'補充';
+        }
+      }else if(expired){
+        reserve+=p.balance;
+        action+=' | E'+p.id+'到期返還';
+      }else{
+        p.balance*=(1+apr/100/365);
+        remaining.push(p);
+      }
+    }
+    activePools=remaining;
+    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){
+      let ti=capital-reserve,ac=shETH>0?ti/shETH:td.close*(1-discount/100),stp=ac*(1+shTarget/100);
+      if(td.avg>=stp){
+        reserve+=shETH*td.avg*(1+shAPR/100*shDays);
+        action+=' | SH賣出'+shETH.toFixed(3)+'ETH';
+        shETH=0;
+        shEntryDay=-1;
+      }
+    }
+    let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;
+    equityHistory.push(tl);
+  }
+  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve,poolCount:activePools.length};
+}
+function runSimulation(){
+  console.log('Simulation started');
+  let capital=parseFloat(document.getElementById('totalCapital').value),
+      poolCount=parseInt(document.getElementById('poolCount').value),
+      poolSize=parseFloat(document.getElementById('poolSize').value),
+      days=parseInt(document.getElementById('backtestDays').value),
+      dbDays=parseInt(document.getElementById('dbDays').value),
+      dbTarget=parseFloat(document.getElementById('dbTarget').value),
+      dbKO=parseFloat(document.getElementById('dbKO').value),
+      dbAPR=parseFloat(document.getElementById('dbAPR').value),
+      blDays=parseInt(document.getElementById('blDays').value)||7,
+      blDiscount=parseFloat(document.getElementById('blDiscount').value),
+      blAPR=parseFloat(document.getElementById('blAPR').value),
+      shTarget=parseFloat(document.getElementById('shTarget').value),
+      shAPR=parseFloat(document.getElementById('shAPR').value),
+      shDays=parseInt(document.getElementById('shDays').value)||1;
+  let priceData=genPrice(days);
+  let dbResult=dbMode==='A'?runDBA(priceData,capital,poolCount,poolSize,dbDays,dbTarget,dbKO,dbAPR,shTarget,shAPR,shDays):runDBB(priceData,capital,poolCount,poolSize,dbDays,dbTarget,dbKO,dbAPR,shTarget,shAPR,shDays);
+  let blResult=runBL(priceData,capital,poolCount,poolSize,blDays,blDiscount,blAPR,shTarget,shAPR,shDays);
+  let dbROI=((dbResult.finalEquity-capital)/capital*100).toFixed(2);
+  document.getElementById('db-total').textContent='$'+Math.round(dbResult.finalEquity).toLocaleString();
+  document.getElementById('db-total').className='stat-value '+(dbROI>=0?'green':'red');
+  document.getElementById('db-roi').textContent=(dbROI>=0?'+':'')+dbROI+'%';
+  document.getElementById('db-eth').textContent=dbResult.shETH.toFixed(4)+' ETH';
+  document.getElementById('db-reserve').textContent='$'+Math.round(dbResult.reserve).toLocaleString();
+  let blROI=((blResult.finalEquity-capital)/capital*100).toFixed(2);
+  document.getElementById('bl-total').textContent='$'+Math.round(blResult.finalEquity).toLocaleString();
+  document.getElementById('bl-total').className='stat-value '+(blROI>=0?'green':'red');
+  document.getElementById('bl-roi').textContent=(blROI>=0?'+':'')+blROI+'%';
+  document.getElementById('bl-eth').textContent=blResult.shETH.toFixed(4)+' ETH';
+  document.getElementById('bl-pools').textContent=blResult.poolCount+' 個';
+  drawChart('dbChart',dbResult.equityHistory,'#00d9ff');
+  drawChart('blChart',blResult.equityHistory,'#ff8c00');
+  console.log('Simulation completed');
+}
+function drawChart(cid,data,color){
+  let ctx=document.getElementById(cid).getContext('2d');
+  if(window[cid+'C'])window[cid+'C'].destroy();
+  window[cid+'C']=new Chart(ctx,{
+    type:'line',
+    data:{labels:data.map((_,i)=>'D'+(i+1)),datasets:[{data:data,borderColor:color,backgroundColor:color+'20',fill:true,tension:.3,pointRadius:0}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{ticks:{color:'#9ca3af',callback:v=>'$'+v/1000+'k'}}}}
+  });
+}
+window.onload=function(){
+  console.log('Page loaded');
+  runSimulation();
+};
+</script>
+</body>
+</html>
