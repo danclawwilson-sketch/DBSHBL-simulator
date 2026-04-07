@@ -61,7 +61,7 @@ body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);
 <div class="input-group"><label>SH APR (%)</label><input type="number" id="shAPR" value="350"></div>
 <div class="input-group"><label>SH週期天數 (T+N)</label><input type="number" id="shDays" value="1"></div>
 <div class="input-group"><label>回測天數</label><select id="backtestDays"><option value="14">14天</option><option value="30">30天</option><option value="90">90天</option><option value="365" selected>365天</option></select></div>
-<button class="btn" onclick="runSimulation()">▶ 開始回測</button>
+<button class="btn" onclick="runSim()">▶ 開始回測</button>
 </div>
 <div class="results">
 <div class="result-col db-col">
@@ -88,168 +88,71 @@ body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);
 </div>
 <script>
 let dbMode='A';
-function setDBMode(m){
-  dbMode=m;
-  document.getElementById('dbModeA').classList.toggle('active',m==='A');
-  document.getElementById('dbModeB').classList.toggle('active',m==='B');
-}
-function genPrice(d){
-  let p=2000,r=[];
-  for(let i=0;i<d;i++){
-    p*=(1+(Math.random()-.5)*.08);
-    r.push({date:'Day'+(i+1),open:p*.995,high:p*1.025,low:p*.975,close:p,avg:p});
-  }
-  return r;
-}
+function setDBMode(m){dbMode=m;document.getElementById('dbModeA').classList.toggle('active',m==='A');document.getElementById('dbModeB').classList.toggle('active',m==='B')}
+function genPrice(d){let p=2000,r=[];for(let i=0;i<d;i++){p*=(1+(Math.random()-.5)*.08);r.push({date:'Day'+(i+1),open:p*.995,high:p*1.025,low:p*.975,close:p,avg:p})}return r}
 function runDBA(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,shAPR,shDays){
   let reserve=capital,pools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;
   for(let day=0;day<data.length;day++){
     let td=data[day],action='';
-    if(day<poolCount&&reserve>=poolSize){
-      reserve-=poolSize;
-      pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
-      action='P'+(day+1)+'投入';
-    }
+    if(day<poolCount&&reserve>=poolSize){reserve-=poolSize;pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action='P'+(day+1)+'投入'}
     if(day===dbDays-1&&pools.length>0){
       action+=' | 結算:';
       for(let p of pools){
         let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);
-        let heldDays=day-p.startDay+1; // 實際持有天數
-        if(td.avg>=kp){
-          let inx=p.balance*(apr/100)*(heldDays/365);
-          reserve+=p.balance+inx;
-          action+=' P'+p.id+'KO('+heldDays+'天)';
-        }else if(td.avg<=tp){
-          shETH+=p.balance/tp;
-          shEntryDay=day;
-          action+=' P'+p.id+'S1';
-        }else{
-          let hf=p.balance/2;
-          shETH+=hf/tp;
-          reserve+=hf;
-          action+=' P'+p.id+'S2';
-        }
+        let heldDays=day-p.startDay+1;
+        if(td.avg>=kp){let inx=p.balance*(apr/100)*(heldDays/365);reserve+=p.balance+inx;action+=' P'+p.id+'KO('+heldDays+'天)'}
+        else if(td.avg<=tp){shETH+=p.balance/tp;shEntryDay=day;action+=' P'+p.id+'S1'}
+        else{let hf=p.balance/2;shETH+=hf/tp;reserve+=hf;action+=' P'+p.id+'S2'}
       }
       pools=[];
-      if(reserve>=poolSize){
-        reserve-=poolSize;
-        pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
-        action+=' | P'+(nextId-1)+'再投入';
-      }
+      if(reserve>=poolSize){reserve-=poolSize;pools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action+=' | P'+(nextId-1)+'再投入'}
     }
-    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){
-      let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);
-      if(td.avg>=stp){
-        reserve+=shETH*td.avg*(1+shAPR/100*shDays);
-        action+=' | SH賣出'+shETH.toFixed(3)+'ETH';
-        shETH=0;
-        shEntryDay=-1;
-      }
-    }
-    let ev=shETH*td.close,pv=pools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;
-    equityHistory.push(tl);
+    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);if(td.avg>=stp){reserve+=shETH*td.avg*(1+shAPR/100*shDays);action+=' | SH賣出'+shETH.toFixed(3)+'ETH';shETH=0;shEntryDay=-1}}
+    let ev=shETH*td.close,pv=pools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;equityHistory.push(tl)
   }
-  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve};
+  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve}
 }
 function runDBB(data,capital,poolCount,poolSize,dbDays,target,ko,apr,shTarget,shAPR,shDays){
   let reserve=capital,activePools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;
   for(let day=0;day<data.length;day++){
     let td=data[day],action='';
-    if(activePools.length<poolCount&&reserve>=poolSize){
-      reserve-=poolSize;
-      activePools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
-      action='P'+(nextId-1)+'投入';
-    }
+    if(activePools.length<poolCount&&reserve>=poolSize){reserve-=poolSize;activePools.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action='P'+(nextId-1)+'投入'}
     let remaining=[];
     for(let p of activePools){
       if(day-p.startDay>=dbDays){
         let tp=p.basePrice*(1-target/100),kp=p.basePrice*(1+ko/100);
-        let heldDays=day-p.startDay; // 實際持有天數
-        if(td.avg>=kp){
-          let inx=p.balance*(apr/100)*(heldDays/365);
-          reserve+=p.balance+inx;
-          action+=' P'+p.id+'KO('+heldDays+'天)';
-        }else if(td.avg<=tp){
-          shETH+=p.balance/tp;
-          shEntryDay=day;
-          action+=' P'+p.id+'S1';
-        }else{
-          let hf=p.balance/2;
-          shETH+=hf/tp;
-          reserve+=hf;
-          action+=' P'+p.id+'S2';
-        }
-        if(reserve>=poolSize){
-          reserve-=poolSize;
-          remaining.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});
-          action+='→P'+(nextId-1);
-        }
-      }else remaining.push(p);
+        let heldDays=day-p.startDay;
+        if(td.avg>=kp){let inx=p.balance*(apr/100)*(heldDays/365);reserve+=p.balance+inx;action+=' P'+p.id+'KO('+heldDays+'天)'}
+        else if(td.avg<=tp){shETH+=p.balance/tp;shEntryDay=day;action+=' P'+p.id+'S1'}
+        else{let hf=p.balance/2;shETH+=hf/tp;reserve+=hf;action+=' P'+p.id+'S2'}
+        if(reserve>=poolSize){reserve-=poolSize;remaining.push({id:nextId++,balance:poolSize,startDay:day,basePrice:td.close});action+='→P'+(nextId-1)}
+      }else remaining.push(p)
     }
     activePools=remaining;
-    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){
-      let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);
-      if(td.avg>=stp){
-        reserve+=shETH*td.avg*(1+shAPR/100*shDays);
-        action+=' | SH賣出'+shETH.toFixed(3)+'ETH';
-        shETH=0;
-        shEntryDay=-1;
-      }
-    }
-    let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;
-    equityHistory.push(tl);
+    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){let ac=(capital-reserve)/shETH||td.close,stp=ac*(1+shTarget/100);if(td.avg>=stp){reserve+=shETH*td.avg*(1+shAPR/100*shDays);action+=' | SH賣出'+shETH.toFixed(3)+'ETH';shETH=0;shEntryDay=-1}}
+    let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;equityHistory.push(tl)
   }
-  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve};
+  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve}
 }
 function runBL(data,capital,poolCount,poolSize,blDays,discount,apr,shTarget,shAPR,shDays){
   let reserve=capital,activePools=[],shETH=0,shEntryDay=-1,equityHistory=[],nextId=1;
   for(let day=0;day<data.length;day++){
     let td=data[day],action='';
-    if(activePools.length<poolCount&&reserve>=poolSize){
-      reserve-=poolSize;
-      let bp=td.close*(1-discount/100);
-      activePools.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:bp});
-      action='E'+(nextId-1)+'投入($'+bp.toFixed(0)+')';
-    }
+    if(activePools.length<poolCount&&reserve>=poolSize){reserve-=poolSize;let bp=td.close*(1-discount/100);activePools.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:bp});action='E'+(nextId-1)+'投入($'+bp.toFixed(0)+')'}
     let remaining=[];
     for(let p of activePools){
       let expired=day-p.startDay>=blDays,triggered=td.low<=p.buyPrice;
-      if(triggered){
-        let eb=p.balance/p.buyPrice;
-        shETH+=eb;
-        shEntryDay=day;
-        action+=' | E'+p.id+'成交→'+eb.toFixed(3)+'ETH';
-        if(reserve>=poolSize){
-          reserve-=poolSize;
-          let nb=td.close*(1-discount/100);
-          remaining.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:nb});
-          action+='→E'+(nextId-1)+'補充';
-        }
-      }else if(expired){
-        reserve+=p.balance;
-        action+=' | E'+p.id+'到期返還';
-      }else{
-        p.balance*=(1+apr/100/365);
-        remaining.push(p);
-      }
+      if(triggered){let eb=p.balance/p.buyPrice;shETH+=eb;shEntryDay=day;action+=' | E'+p.id+'成交→'+eb.toFixed(3)+'ETH';if(reserve>=poolSize){reserve-=poolSize;let nb=td.close*(1-discount/100);remaining.push({id:nextId++,balance:poolSize,startDay:day,buyPrice:nb});action+='→E'+(nextId-1)+'補充'}}
+      else if(expired){reserve+=p.balance;action+=' | E'+p.id+'到期返還'}
+      else{p.balance*=(1+apr/100/365);remaining.push(p)}
     }
     activePools=remaining;
-    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){
-      let ti=capital-reserve,ac=shETH>0?ti/shETH:td.close*(1-discount/100),stp=ac*(1+shTarget/100);
-      if(td.avg>=stp){
-        reserve+=shETH*td.avg*(1+shAPR/100*shDays);
-        action+=' | SH賣出'+shETH.toFixed(3)+'ETH';
-        shETH=0;
-        shEntryDay=-1;
-      }
-    }
-    let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;
-    equityHistory.push(tl);
+    if(shETH>0&&shEntryDay>=0&&day-shEntryDay>=shDays){let ti=capital-reserve,ac=shETH>0?ti/shETH:td.close*(1-discount/100),stp=ac*(1+shTarget/100);if(td.avg>=stp){reserve+=shETH*td.avg*(1+shAPR/100*shDays);action+=' | SH賣出'+shETH.toFixed(3)+'ETH';shETH=0;shEntryDay=-1}}
+    let ev=shETH*td.close,pv=activePools.reduce((s,p)=>s+p.balance,0),tl=reserve+pv+ev;equityHistory.push(tl)
   }
-  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve,poolCount:activePools.length};
+  return{equityHistory:equityHistory,finalEquity:equityHistory[equityHistory.length-1]||capital,shETH:shETH,reserve:reserve,poolCount:activePools.length}
 }
-function runSimulation(){
-  console.log('Simulation started');
+function runSim(){
   let capital=parseFloat(document.getElementById('totalCapital').value),
       poolCount=parseInt(document.getElementById('poolCount').value),
       poolSize=parseFloat(document.getElementById('poolSize').value),
@@ -280,22 +183,14 @@ function runSimulation(){
   document.getElementById('bl-eth').textContent=blResult.shETH.toFixed(4)+' ETH';
   document.getElementById('bl-pools').textContent=blResult.poolCount+' 個';
   drawChart('dbChart',dbResult.equityHistory,'#00d9ff');
-  drawChart('blChart',blResult.equityHistory,'#ff8c00');
-  console.log('Simulation completed');
+  drawChart('blChart',blResult.equityHistory,'#ff8c00')
 }
 function drawChart(cid,data,color){
   let ctx=document.getElementById(cid).getContext('2d');
   if(window[cid+'C'])window[cid+'C'].destroy();
-  window[cid+'C']=new Chart(ctx,{
-    type:'line',
-    data:{labels:data.map((_,i)=>'D'+(i+1)),datasets:[{data:data,borderColor:color,backgroundColor:color+'20',fill:true,tension:.3,pointRadius:0}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{ticks:{color:'#9ca3af',callback:v=>'$'+v/1000+'k'}}}}
-  );
+  window[cid+'C']=new Chart(ctx,{type:'line',data:{labels:data.map((_,i)=>'D'+(i+1)),datasets:[{data:data,borderColor:color,backgroundColor:color+'20',fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{ticks:{color:'#9ca3af',callback:v=>'$'+v/1000+'k'}}}})
 }
-window.onload=function(){
-  console.log('Page loaded');
-  runSimulation();
-};
+window.onload=function(){runSim()}
 </script>
 </body>
 </html>
