@@ -344,14 +344,16 @@ let poolCount=5, _simRange='1y', _allLog={db:[],bl:[]};
 const charts={db:{},bl:{}};
 function setRange(v,btn){_simRange=v;document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 function changePool(d){const n=poolCount+d;if(n<1||n>20)return;poolCount=n;document.getElementById('poolCountDisplay').textContent=poolCount;updateReserve();}
-function updateReserve(){const cap=parseFloat(document.getElementById('initCapital').value)||10000,ps=parseFloat(document.getElementById('poolSize').value)||1000,res=cap-poolCount*ps,el=document.getElementById('reservePreview');el.textContent=res.toLocaleString('zh-TW',{maximumFractionDigits:0});el.style.color=res<0?'var(--red)':'var(--yellow)';}
-updateReserve();
+function updateReserve(){const cap=parseFloat(document.getElementById('initCapital').value)||10000,ps=parseFloat(document.getElementById('poolSize').value)||1000,res=cap-poolCount*ps,el=document.getElementById('reservePreview');if(el){el.textContent=res.toLocaleString('zh-TW',{maximumFractionDigits:0});el.style.color=res<0?'var(--red)':'var(--yellow)';}}
 function switchTab(side,name){const tabs=['charts','pools','summary','log'];const col=document.querySelector('.col-'+side);col.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));tabs.forEach(n=>{const el=document.getElementById(side+'-tab-'+n);if(el)el.classList.toggle('active',n===name);});}
 const fmt=(n,d=2)=>(+n).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtU=n=>'$'+fmt(n,0);
-async function syncPrice(){const btn=document.querySelector('.sync-btn');btn.textContent='...';try{const r=await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT');const d=await r.json();document.getElementById('livePrice').textContent='$'+parseFloat(d.price).toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});document.getElementById('liveTime').textContent=new Date().toLocaleTimeString('zh-TW');}catch(e){document.getElementById('livePrice').textContent='ERROR';}btn.textContent='⟳ SYNC';}
-syncPrice();
+function syncPrice(){const btn=document.querySelector('.sync-btn');if(btn)btn.textContent='...';const lastPrice=ETH_DATA[ETH_DATA.length-1].close;document.getElementById('livePrice').textContent='$'+lastPrice.toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});document.getElementById('liveTime').textContent='本地數據 '+ETH_DATA[ETH_DATA.length-1].date;if(btn)btn.textContent='⟳ SYNC';}
 // 本地 ETH 歷史數據 (2024-01-01 至 2025-04-07)
+document.addEventListener('DOMContentLoaded', function() {
+  updateReserve();
+  syncPrice();
+});
 const ETH_DATA=[
 {date:'2024/1/1',open:2300,high:2380,low:2280,close:2350},{date:'2024/1/2',open:2350,high:2420,low:2330,close:2400},{date:'2024/1/3',open:2400,high:2450,low:2380,close:2420},{date:'2024/1/4',open:2420,high:2480,low:2400,close:2460},{date:'2024/1/5',open:2460,high:2520,low:2440,close:2500},{date:'2024/1/6',open:2500,high:2550,low:2480,close:2530},{date:'2024/1/7',open:2530,high:2580,low:2510,close:2560},{date:'2024/1/8',open:2560,high:2620,low:2540,close:2600},{date:'2024/1/9',open:2600,high:2650,low:2580,close:2630},{date:'2024/1/10',open:2630,high:2680,low:2610,close:2660},
 {date:'2024/1/11',open:2660,high:2720,low:2640,close:2700},{date:'2024/1/12',open:2700,high:2750,low:2680,close:2730},{date:'2024/1/13',open:2730,high:2780,low:2710,close:2760},{date:'2024/1/14',open:2760,high:2820,low:2740,close:2800},{date:'2024/1/15',open:2800,high:2850,low:2780,close:2830},{date:'2024/1/16',open:2830,high:2880,low:2810,close:2860},{date:'2024/1/17',open:2860,high:2920,low:2840,close:2900},{date:'2024/1/18',open:2900,high:2950,low:2880,close:2930},{date:'2024/1/19',open:2930,high:2980,low:2910,close:2960},{date:'2024/1/20',open:2960,high:3020,low:2940,close:3000},
