@@ -1538,8 +1538,8 @@ function runDB(priceData,initCapital,poolSize,dbDays,dbTargetPct,dbKOPct,dbAPR,s
         }
     }
 }else{if(p.id===1){p.targetPrice=today.open*(1-dbTargetPct);p.koPrice=today.open*(1+dbKOPct);p.daysInProduct=0;}else{reserve+=p.balance;p.balance=0;p.mode='empty';p.refillDelay=Math.max(0,p.id-2);}}}else if(today.price1600<=p.targetPrice){dbS1++;const ethBought=principal/p.targetPrice;totalEthBought+=ethBought;totalEthCostUsdt+=principal;const nk=today.price1600*(1+shKOPct);shPos.push({ethAmt:ethBought,koPrice:nk,cycleDays:shDays});p.balance=0;logEntries.push({date:today.date,badge:'DB-S1',bc:'lb-s1',msg:`P${p.id}[B${p.batchId}] S1 ETH×${fmt(ethBought,4)}@${fmt(p.targetPrice,0)}→SH`});if(settleMode==='singleDay'){
-    // Return principal to reserve (already bought ETH), pool goes to empty
-    reserve+=principal;p.balance=0;p.mode='empty';
+    // S1: 本金已全部買 ETH 進 SH，不返還 reserve
+    p.balance=0;p.mode='empty';
     // Check if all pools are now empty
     const allEmpty=pools.every(pool=>pool.mode==='empty');
     if(allEmpty){
