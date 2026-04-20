@@ -266,6 +266,9 @@ document.addEventListener('DOMContentLoaded', function() {
   updateReserve();
   syncPrice();
 });
+// Also call immediately in case DOMContentLoaded already fired
+updateReserve();
+syncPrice();
 
 // ETH Daily Data - REAL BINANCE DATA
 const ETH_DATA = [
