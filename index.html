@@ -243,6 +243,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;b
 </div>
 </div>
 <script>
+window.onerror = function(msg, url, line, col, error) {
+  const status = document.getElementById('statusText');
+  if(status) status.textContent = 'JS ERROR: ' + msg + ' (L' + line + ')';
+  console.error('Global error:', msg, 'at line', line, 'col', col);
+  return false;
+};
 let poolCount=5, _simRange='1y', _allLog=[];
 let blChartMain=null, blChartStack=null;
 
@@ -1389,6 +1395,7 @@ const ETH_DATA = [
 ].map(d => ({...d, price1600: d.close}));
 
 function startSimulation() {
+  try {
   const btn = document.getElementById('btnRun');
   btn.disabled = true;
   document.getElementById('statusDot').classList.add('on');
@@ -1575,6 +1582,13 @@ function startSimulation() {
   btn.disabled = false;
   document.getElementById('statusDot').classList.remove('on');
   document.getElementById('statusText').textContent = 'READY';
+  } catch(e) {
+    console.error('Simulation error:', e);
+    document.getElementById('statusText').textContent = 'ERROR: ' + e.message;
+    document.getElementById('bl-total').textContent = 'ERROR';
+    document.getElementById('bl-roi').textContent = e.message;
+    document.getElementById('btnRun').disabled = false;
+  }
 }
 
 function renderLog(filter){
