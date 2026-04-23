@@ -243,12 +243,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;b
 </div>
 </div>
 <script>
-window.onerror = function(msg, url, line, col, error) {
-  const status = document.getElementById('statusText');
-  if(status) status.textContent = 'JS ERROR: ' + msg + ' (L' + line + ')';
-  console.error('Global error:', msg, 'at line', line, 'col', col);
-  return false;
-};
 let poolCount=5, _simRange='1y', _allLog=[];
 let blChartMain=null, blChartStack=null;
 
@@ -260,17 +254,10 @@ function switchTab(name){const tabs=['charts','pools','summary','log'];tabs.forE
 const fmt=(n,d=2)=>(+n).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtU=n=>'$'+fmt(n,0);
 
-function syncPrice(){const btn=document.querySelector('.sync-btn');if(btn)btn.textContent='...';const lastPrice=ETH_DATA[ETH_DATA.length-1].close;document.getElementById('livePrice').textContent='$'+lastPrice.toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});document.getElementById('liveTime').textContent='本地數據 '+ETH_DATA[ETH_DATA.length-1].date;if(btn)btn.textContent='⟳ SYNC';}
-
-document.addEventListener('DOMContentLoaded', function() {
-  updateReserve();
-  syncPrice();
-});
-// Also call immediately in case DOMContentLoaded already fired
-updateReserve();
-syncPrice();
-
 // ETH Daily Data - REAL BINANCE DATA
+// Range: 2023-01-01 to 2026-03-27
+// Total: 1123 days
+
 const ETH_DATA = [
   {date:'2023/1/1',open:1196,high:1204,low:1190,close:1200},
   {date:'2023/1/2',open:1200,high:1224,low:1193,close:1214},
@@ -1397,8 +1384,16 @@ const ETH_DATA = [
   {date:'2026/3/27',open:2060,high:2077,low:2035,close:2037},
 ].map(d => ({...d, price1600: d.close}));
 
+function syncPrice(){const btn=document.querySelector('.sync-btn');if(btn)btn.textContent='...';const lastPrice=ETH_DATA[ETH_DATA.length-1].close;document.getElementById('livePrice').textContent='$'+lastPrice.toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});document.getElementById('liveTime').textContent='本地數據 '+ETH_DATA[ETH_DATA.length-1].date;if(btn)btn.textContent='⟳ SYNC';}
+
+document.addEventListener('DOMContentLoaded', function() {
+  updateReserve();
+  syncPrice();
+});
+
+// ETH Daily Data - REAL BINANCE DATA
+
 function startSimulation() {
-  try {
   const btn = document.getElementById('btnRun');
   btn.disabled = true;
   document.getElementById('statusDot').classList.add('on');
@@ -1585,13 +1580,6 @@ function startSimulation() {
   btn.disabled = false;
   document.getElementById('statusDot').classList.remove('on');
   document.getElementById('statusText').textContent = 'READY';
-  } catch(e) {
-    console.error('Simulation error:', e);
-    document.getElementById('statusText').textContent = 'ERROR: ' + e.message;
-    document.getElementById('bl-total').textContent = 'ERROR';
-    document.getElementById('bl-roi').textContent = e.message;
-    document.getElementById('btnRun').disabled = false;
-  }
 }
 
 function renderLog(filter){
