@@ -1395,9 +1395,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function startSimulation() {
   const btn = document.getElementById('btnRun');
+  if (!btn) { alert('找不到開始按鈕，請刷新頁面'); return; }
   btn.disabled = true;
   document.getElementById('statusDot').classList.add('on');
   document.getElementById('statusText').textContent = 'RUNNING';
+  
+  try {
   
   // Get parameters
   const initCapital = parseFloat(document.getElementById('initCapital').value) || 10000;
@@ -1408,6 +1411,11 @@ function startSimulation() {
   const shDays = parseInt(document.getElementById('shDays').value) || 1;
   const shAPR = parseFloat(document.getElementById('shAPR').value) || 150;
   const shKO = parseFloat(document.getElementById('shKO').value) || 3;
+  
+  // Debug: verify ETH_DATA
+  if (typeof ETH_DATA === 'undefined' || ETH_DATA.length === 0) {
+    throw new Error('ETH_DATA is missing or empty');
+  }
   
   // Simulation
   let reserve = initCapital - poolCount * poolSize;
@@ -1580,6 +1588,13 @@ function startSimulation() {
   btn.disabled = false;
   document.getElementById('statusDot').classList.remove('on');
   document.getElementById('statusText').textContent = 'READY';
+  } catch(e) {
+    btn.disabled = false;
+    document.getElementById('statusDot').classList.remove('on');
+    document.getElementById('statusText').textContent = 'ERROR';
+    console.error('Simulation error:', e);
+    alert('模擬執行失敗: ' + e.message);
+  }
 }
 
 function renderLog(filter){
