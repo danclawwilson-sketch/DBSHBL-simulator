@@ -1452,6 +1452,10 @@ function startSimulation() {
       if(pool.mode === 'wait'){
         if(pool.startDelay > 0){
           pool.startDelay--;
+          // Log waiting status every few days to show activity
+          if(day % 30 === 0 && pool.startDelay > 0){
+            _allLog.push({date:d.date,type:'WAIT',msg:`Pool #${pool.id} 等待 ${pool.startDelay} 天後啟動`});
+          }
         } else {
           // Start BL
           if(reserve >= poolSize){
@@ -1463,6 +1467,11 @@ function startSimulation() {
             pool.blStartDay = day;
             blCount++;
             _allLog.push({date:d.date,type:'BL1',msg:`Pool #${pool.id} 開始 Buy Low (目標 $${blTargetPrice.toFixed(2)})`});
+          } else {
+            // Log when reserve is insufficient
+            if(pool.id === 1 || day % 30 === 0){
+              _allLog.push({date:d.date,type:'WAIT',msg:`Pool #${pool.id} 資金不足 (備用金 $${reserve.toFixed(0)} < 每池 $${poolSize})`});
+            }
           }
         }
       } else if(pool.mode === 'bl'){
