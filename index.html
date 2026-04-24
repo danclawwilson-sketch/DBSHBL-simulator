@@ -1628,12 +1628,12 @@ function startSimulation() {
     const avgCost = totalInvested > 0 ? totalInvested / totalEth : 0;
 
     // Update UI stats
-    document.getElementById('s-total').textContent = fmtU(finalPoolValue);
-    document.getElementById('s-roi').textContent = (roi >= 0 ? '+' : '') + fmt(roi) + '%';
-    document.getElementById('s-invested').textContent = fmtU(totalPrincipal);
-    document.getElementById('s-eth').textContent = fmtU(finalTotalEth * finalPrice);
-    document.getElementById('s-ethQty').textContent = fmt(finalTotalEth, 4) + ' ETH';
-    document.getElementById('s-mdd').textContent = fmt(maxDrawdown) + '%';
+    document.getElementById('bl-total').textContent = fmtU(finalPoolValue);
+    document.getElementById('bl-roi').textContent = (roi >= 0 ? '+' : '') + fmt(roi) + '%';
+    document.getElementById('bl-invested').textContent = fmtU(totalPrincipal);
+    document.getElementById('bl-eth').textContent = fmtU(finalTotalEth * finalPrice);
+    document.getElementById('bl-ethQty').textContent = fmt(finalTotalEth, 4) + ' ETH';
+    document.getElementById('bl-mdd').textContent = fmt(maxDrawdown) + '%';
 
     let totalBLCount = 0, totalBLHit = 0, totalSHCount = 0, totalSHHit = 0;
     for (const p of pools) {
@@ -1641,13 +1641,13 @@ function startSimulation() {
       totalSHCount += p.shCount; totalSHHit += p.shHit;
     }
     const blWr = totalBLCount > 0 ? (totalBLHit / totalBLCount * 100) : 0;
-    document.getElementById('s-wr').textContent = fmt(blWr) + '%';
-    document.getElementById('s-wrc').textContent = `${totalBLHit}/${totalBLCount}`;
-    document.getElementById('s-shSell').textContent = totalSHHit;
-    document.getElementById('s-shExp').textContent = `${totalSHHit} 次成功`;
-    document.getElementById('s-cost').textContent = avgCost > 0 ? '$' + fmt(avgCost, 2) : '--';
-    document.getElementById('s-costVs').textContent = avgCost > 0 ? `vs 現價 $${fmt(finalPrice, 2)}` : '';
-    document.getElementById('s-price').textContent = '$' + fmt(finalPrice, 0);
+    document.getElementById('bl-wr').textContent = fmt(blWr) + '%';
+    document.getElementById('bl-wrc').textContent = `${totalBLHit}/${totalBLCount}`;
+    document.getElementById('bl-shSell').textContent = totalSHHit;
+    document.getElementById('bl-shExp').textContent = `${totalSHHit} 次成功`;
+    document.getElementById('bl-cost').textContent = avgCost > 0 ? '$' + fmt(avgCost, 2) : '--';
+    document.getElementById('bl-costVs').textContent = avgCost > 0 ? `vs 現價 $${fmt(finalPrice, 2)}` : '';
+    document.getElementById('bl-price').textContent = '$' + fmt(finalPrice, 0);
 
     // Update pool cards
     let poolsHtml = '';
@@ -1672,7 +1672,7 @@ function startSimulation() {
       }
       poolsHtml += `<div class="pool-card ${cls}"><div class="pc-id">Pool #${p.id}</div><div class="pc-val">${val}</div><div class="pc-sub">${sub}</div>${badge}</div>`;
     }
-    document.getElementById('poolsGrid').innerHTML = poolsHtml;
+    document.getElementById('bl-poolsGrid').innerHTML = poolsHtml;
 
     // Update summary table
     let sumHtml = `
@@ -1689,7 +1689,7 @@ function startSimulation() {
       <tr><td>ETH 均買成本</td><td class="num">${avgCost > 0 ? '$' + fmt(avgCost, 2) : '--'}</td></tr>
       <tr><td>ETH 現值</td><td class="num">${fmtU(finalTotalEth * finalPrice)}</td></tr>
     `;
-    document.getElementById('sumTable').innerHTML = sumHtml;
+    document.getElementById('bl-sumTable').innerHTML = sumHtml;
 
     renderLog('');
 
