@@ -1395,209 +1395,308 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function startSimulation() {
   const btn = document.getElementById('btnRun');
-  if (!btn) { alert('找不到開始按鈕，請刷新頁面'); return; }
+  if (!btn) { alert('找不到開始按鈕'); return; }
   btn.disabled = true;
   document.getElementById('statusDot').classList.add('on');
   document.getElementById('statusText').textContent = 'RUNNING';
-  
+
   try {
-  
-  // Get parameters
-  const initCapital = parseFloat(document.getElementById('initCapital').value) || 10000;
-  const poolSize = parseFloat(document.getElementById('poolSize').value) || 1000;
-  const blDays = parseInt(document.getElementById('blDays').value) || 1;
-  const blAPR = parseFloat(document.getElementById('blAPR').value) || 150;
-  const blTarget = parseFloat(document.getElementById('blTarget').value) || 4;
-  const shDays = parseInt(document.getElementById('shDays').value) || 1;
-  const shAPR = parseFloat(document.getElementById('shAPR').value) || 150;
-  const shKO = parseFloat(document.getElementById('shKO').value) || 3;
-  
-  // Debug: verify ETH_DATA
-  if (typeof ETH_DATA === 'undefined' || ETH_DATA.length === 0) {
-    throw new Error('ETH_DATA is missing or empty');
-  }
-  
-  // Simulation
-  let reserve = initCapital - poolCount * poolSize;
-  let ethQty = 0;
-  let totalInvested = 0;
-  let blCount = 0, blHit = 0;
-  let shCount = 0, shHit = 0;
-  _allLog = [];
-  
-  // Pools: each pool can be in 'wait' (waiting for BL), 'bl' (in BL order), 'sh' (has ETH, waiting for SH)
-  let pools = [];
-  for(let i=0;i<poolCount;i++){
-    pools.push({id:i+1,mode:'wait',startDelay:i,blDays:0});
-  }
-  
-  // Get data range
-  let dataEnd = ETH_DATA.length;
-  let dataStart = 0;
-  if(_simRange === '1y') dataStart = Math.max(0, dataEnd - 365);
-  else if(_simRange === '2y') dataStart = Math.max(0, dataEnd - 730);
-  else if(_simRange === '15d') dataStart = Math.max(0, dataEnd - 15);
-  else if(_simRange === '8d') dataStart = Math.max(0, dataEnd - 8);
-  
-  const simData = ETH_DATA.slice(dataStart, dataEnd);
-  
-  // Run simulation
-  for(let day=0; day<simData.length; day++){
-    const d = simData[day];
-    const price = d.close;
-    const blTargetPrice = price * (1 - blTarget/100);
-    const shTargetPrice = price * (1 + shKO/100);
-    
-    for(const pool of pools){
-      if(pool.mode === 'wait'){
-        if(pool.startDelay > 0){
-          pool.startDelay--;
-          // Log waiting status every few days to show activity
-          if(day % 30 === 0 && pool.startDelay > 0){
-            _allLog.push({date:d.date,type:'WAIT',msg:`Pool #${pool.id} 等待 ${pool.startDelay} 天後啟動`});
+    const poolSize = parseFloat(document.getElementById('poolSize').value) || 1000;
+    const blDays = parseInt(document.getElementById('blDays').value) || 3;
+    const blAPR = parseFloat(document.getElementById('blAPR').value) || 150;
+    const blTarget = parseFloat(document.getElementById('blTarget').value) || 3;
+    const shDays = parseInt(document.getElementById('shDays').value) || 3;
+    const shAPR = parseFloat(document.getElementById('shAPR').value) || 150;
+    const shKO = parseFloat(document.getElementById('shKO').value) || 5;
+
+    if (typeof ETH_DATA === 'undefined' || ETH_DATA.length === 0) {
+      throw new Error('ETH_DATA is missing or empty');
+    }
+
+    // Get data range
+    let dataEnd = ETH_DATA.length;
+    let dataStart = 0;
+    if (_simRange === '1y') dataStart = Math.max(0, dataEnd - 365);
+    else if (_simRange === '2y') dataStart = Math.max(0, dataEnd - 730);
+    else if (_simRange === '15d') dataStart = Math.max(0, dataEnd - 15);
+    else if (_simRange === '8d') dataStart = Math.max(0, dataEnd - 8);
+
+    const simData = ETH_DATA.slice(dataStart, dataEnd);
+
+    // Each pool: independent funding, cycles BL -> SH -> BL
+    // Pool state machine: 'idle' -> 'bl' -> 'sh' -> 'bl'
+    // When BL expires without execution: principal+yield roll into next BL
+    // When SH expires without execution: ETH continues to next SH cycle
+    let pools = [];
+    for (let i = 0; i < poolCount; i++) {
+      pools.push({
+        id: i + 1,
+        mode: 'idle',     // idle | bl | sh
+        principal: poolSize,
+        blDays: 0,
+        shDays: 0,
+        ethQty: 0,
+        ethCost: 0,
+        targetPrice: 0,
+        // stats
+        blCount: 0, blHit: 0,
+        shCount: 0, shHit: 0,
+        totalInvested: 0,
+        totalReturned: 0,
+      });
+    }
+
+    _allLog = [];
+    let totalInvested = 0;
+    let totalReturned = 0;
+    let totalEth = 0;
+    let peakValue = 0;
+    let maxDrawdown = 0;
+    let equityHistory = [];
+
+    // Helper: compute BL target value with yield
+    function blTargetValue(principal, days, apr) {
+      const dailyRate = apr / 365 / 100;
+      return principal * Math.pow(1 + dailyRate, days);
+    }
+
+    // Helper: start a new BL cycle on a pool
+    function startBL(pool, day, price) {
+      const targetPrice = price * (1 - blTarget / 100);
+      pool.mode = 'bl';
+      pool.blDays = 0;
+      pool.targetPrice = targetPrice;
+      pool.blCount++;
+      _allLog.push({ date: simData[day].date, type: 'BL-START', msg: `Pool #${pool.id} 開始 BL (目標 $${targetPrice.toFixed(2)}, 本金 $${pool.principal.toFixed(0)})` });
+    }
+
+    // Helper: BL was hit - buy ETH
+    function executeBL(pool, day, price) {
+      const execPrice = pool.targetPrice;
+      const targetVal = blTargetValue(pool.principal, pool.blDays, blAPR);
+      const ethBought = targetVal / execPrice;
+      const cost = pool.principal; // the principal used
+
+      pool.mode = 'sh';
+      pool.ethQty = ethBought;
+      pool.ethCost = execPrice;
+      pool.shDays = 0;
+      pool.targetPrice = execPrice * (1 + shKO / 100);
+      pool.blHit++;
+      pool.totalInvested += pool.principal;
+      totalInvested += pool.principal;
+      totalEth += ethBought;
+
+      _allLog.push({ date: simData[day].date, type: 'BL-HIT', msg: `Pool #${pool.id} BL 成交! 買入 ${ethBought.toFixed(4)} ETH @ $${execPrice.toFixed(2)}` });
+    }
+
+    // Helper: BL expired without execution - roll principal+yield into next BL
+    function expireBL(pool, day, price) {
+      const finalValue = blTargetValue(pool.principal, pool.blDays, blAPR);
+      // Principal rolls forward, no cash returned
+      pool.principal = finalValue;
+      pool.blDays = 0;
+      // Immediately try next BL at today's price
+      const targetPrice = price * (1 - blTarget / 100);
+      pool.targetPrice = targetPrice;
+      // Still in BL mode, just reset days
+      _allLog.push({ date: simData[day].date, type: 'BL-ROLL', msg: `Pool #${pool.id} BL 到期未成交, 滾入 $${finalValue.toFixed(2)} 開始新 BL` });
+    }
+
+    // Helper: start a new SH cycle
+    function startSH(pool, day, price) {
+      pool.mode = 'sh';
+      pool.shDays = 0;
+      pool.targetPrice = pool.ethCost * (1 + shKO / 100);
+      pool.shCount++;
+      _allLog.push({ date: simData[day].date, type: 'SH-START', msg: `Pool #${pool.id} 開始 SH (目標 $${pool.targetPrice.toFixed(2)}, 持有 ${pool.ethQty.toFixed(4)} ETH)` });
+    }
+
+    // Helper: SH was hit - sell ETH
+    function executeSH(pool, day, price) {
+      const execPrice = pool.targetPrice;
+      const ethQty = pool.ethQty;
+      const proceeds = ethQty * execPrice;
+      const profit = proceeds - pool.totalInvested;
+
+      pool.mode = 'idle';
+      pool.principal = proceeds; // proceeds become new principal for next BL
+      pool.totalReturned += proceeds;
+      totalReturned += proceeds;
+      totalEth -= pool.ethQty;
+
+      const roiPct = ((proceeds / pool.totalInvested) - 1) * 100;
+      pool.shHit++;
+      pool.ethQty = 0;
+      pool.totalInvested = 0;
+      pool.ethCost = 0;
+
+      _allLog.push({ date: simData[day].date, type: 'SH-HIT', msg: `Pool #${pool.id} SH 成交! 賣出 ${pool.ethQty.toFixed(4)} ETH @ $${execPrice.toFixed(2)}, 獲利 $${proceeds.toFixed(0)} (${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(1)}%)` });
+
+      // Immediately start new BL with new principal
+      startBL(pool, day, price);
+    }
+
+    // Helper: SH expired without execution - ETH stays, start new SH cycle
+    function expireSH(pool, day, price) {
+      // Update ETH cost to current price (mark-to-market)
+      pool.ethCost = price;
+      pool.shDays = 0;
+      // Recalculate KO target from current price
+      pool.targetPrice = price * (1 + shKO / 100);
+      pool.mode = 'sh';
+      _allLog.push({ date: simData[day].date, type: 'SH-ROLL', msg: `Pool #${pool.id} SH 到期未成交, 持有 ${pool.ethQty.toFixed(4)} ETH, 重新設定 KO $${pool.targetPrice.toFixed(2)}` });
+    }
+
+    // Main simulation loop
+    for (let day = 0; day < simData.length; day++) {
+      const d = simData[day];
+      const price = d.close;
+
+      for (const pool of pools) {
+        if (pool.mode === 'idle') {
+          // Start BL immediately for pool 1, staggered for others
+          const delay = pool.id - 1;
+          if (day === delay) {
+            startBL(pool, day, price);
           }
-        } else {
-          // Start BL
-          if(reserve >= poolSize){
-            reserve -= poolSize;
-            pool.mode = 'bl';
-            pool.blDays = 0;
-            pool.blPrincipal = poolSize;
-            pool.blTargetPrice = blTargetPrice;
-            pool.blStartDay = day;
-            blCount++;
-            _allLog.push({date:d.date,type:'BL1',msg:`Pool #${pool.id} 開始 Buy Low (目標 $${blTargetPrice.toFixed(2)})`});
-          } else {
-            // Log when reserve is insufficient
-            if(pool.id === 1 || day % 30 === 0){
-              _allLog.push({date:d.date,type:'WAIT',msg:`Pool #${pool.id} 資金不足 (備用金 $${reserve.toFixed(0)} < 每池 $${poolSize})`});
+        } else if (pool.mode === 'bl') {
+          pool.blDays++;
+          const targetVal = blTargetValue(pool.principal, pool.blDays, blAPR);
+
+          if (d.low <= pool.targetPrice) {
+            executeBL(pool, day, price);
+          } else if (pool.blDays >= blDays) {
+            expireBL(pool, day, price);
+            // After rolling, check if today's price triggers BL immediately
+            if (d.low <= pool.targetPrice) {
+              executeBL(pool, day, price);
+            }
+          }
+        } else if (pool.mode === 'sh') {
+          pool.shDays++;
+          // Update ethCost to current price (mark-to-market)
+          pool.ethCost = price;
+
+          if (d.high >= pool.targetPrice) {
+            executeSH(pool, day, price);
+          } else if (pool.shDays >= shDays) {
+            expireSH(pool, day, price);
+            // After rolling, check if today's price triggers SH immediately
+            if (d.high >= pool.targetPrice) {
+              executeSH(pool, day, price);
             }
           }
         }
-      } else if(pool.mode === 'bl'){
-        pool.blDays++;
-        const dailyRate = blAPR / 365 / 100;
-        const targetValue = pool.blPrincipal * Math.pow(1+dailyRate, pool.blDays);
-        
-        // Check if price hit target
-        if(d.low <= pool.blTargetPrice){
-          // BL executed - buy ETH
-          const execPrice = pool.blTargetPrice;
-          const ethBought = targetValue / execPrice;
-          ethQty += ethBought;
-          totalInvested += pool.blPrincipal;
-          blHit++;
-          pool.mode = 'sh';
-          pool.shDays = 0;
-          pool.shQty = ethBought;
-          pool.shTargetPrice = execPrice * (1 + shKO/100);
-          pool.ethCost = execPrice;
-          _allLog.push({date:d.date,type:'BL2',msg:`Pool #${pool.id} BL 成交! 買入 ${ethBought.toFixed(4)} ETH @ $${execPrice.toFixed(2)}`});
-        } else if(pool.blDays >= blDays){
-          // BL expired - return principal + yield to reserve
-          const finalValue = targetValue;
-          reserve += finalValue;
-          pool.mode = 'wait';
-          pool.startDelay = pool.id - 1;
-          _allLog.push({date:d.date,type:'BL-EXP',msg:`Pool #${pool.id} BL 到期未成交, 返還 $${finalValue.toFixed(2)}`});
-        }
-      } else if(pool.mode === 'sh'){
-        pool.shDays++;
-        // Check if price hit SH target
-        if(d.high >= pool.shTargetPrice){
-          // SH executed - sell ETH
-          const execPrice = pool.shTargetPrice;
-          const usdtReceived = pool.shQty * execPrice;
-          reserve += usdtReceived;
-          ethQty -= pool.shQty;
-          shHit++;
-          _allLog.push({date:d.date,type:'SH1',msg:`Pool #${pool.id} SH 成交! 賣出 ${pool.shQty.toFixed(4)} ETH @ $${execPrice.toFixed(2)}`});
-          pool.mode = 'wait';
-          pool.startDelay = pool.id - 1;
-        } else if(pool.shDays >= shDays){
-          // SH expired - ETH stays in position
-          _allLog.push({date:d.date,type:'SH-EXP',msg:`Pool #${pool.id} SH 到期未成交, 持有 ${pool.shQty.toFixed(4)} ETH`});
-          pool.mode = 'eth';
+      }
+
+      // Daily equity snapshot
+      let dailyEthValue = 0;
+      let dailyPoolValue = 0;
+      for (const p of pools) {
+        if (p.mode === 'sh' || p.mode === 'bl') {
+          dailyPoolValue += p.mode === 'bl' ? blTargetValue(p.principal, p.blDays, blAPR) : p.ethQty * price;
+        } else if (p.mode === 'idle') {
+          dailyPoolValue += p.principal;
         }
       }
+      const dayEquity = dailyPoolValue;
+      equityHistory.push({ date: d.date, equity: dayEquity, price });
+
+      // Track peak and max drawdown
+      if (dayEquity > peakValue) peakValue = dayEquity;
+      const drawdown = peakValue > 0 ? (peakValue - dayEquity) / peakValue * 100 : 0;
+      if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
-  }
-  
-  // Calculate final stats
-  const finalPrice = simData[simData.length-1].close;
-  const ethValue = ethQty * finalPrice;
-  const blPoolsValue = pools.filter(p=>p.mode==='bl').reduce((sum,p)=>sum+p.blPrincipal,0);
-  const totalValue = reserve + ethValue + blPoolsValue;
-  const roi = ((totalValue - initCapital) / initCapital * 100);
-  const avgCost = totalInvested > 0 ? totalInvested / ethQty : 0;
-  
-  // Update UI
-  document.getElementById('bl-total').textContent = fmtU(totalValue);
-  document.getElementById('bl-roi').textContent = (roi>=0?'+':'') + fmt(roi) + '%';
-  document.getElementById('bl-reserve').textContent = fmtU(reserve);
-  document.getElementById('bl-reservePct').textContent = fmt(reserve/totalValue*100) + '%';
-  document.getElementById('bl-eth').textContent = fmtU(ethValue);
-  document.getElementById('bl-ethQty').textContent = fmt(ethQty,4) + ' ETH';
-  document.getElementById('bl-pools').textContent = fmtU(blPoolsValue);
-  document.getElementById('bl-poolActive').textContent = pools.filter(p=>p.mode==='bl').length + ' active';
-  document.getElementById('bl-mdd').textContent = '--';
-  document.getElementById('bl-wr').textContent = blCount > 0 ? fmt(blHit/blCount*100) + '%' : '0%';
-  document.getElementById('bl-wrc').textContent = `${blHit}/${blCount}`;
-  document.getElementById('bl-shSell').textContent = shHit;
-  document.getElementById('bl-shRoll').textContent = `${shHit} 次成功賣出`;
-  document.getElementById('bl-cost').textContent = avgCost > 0 ? '$' + fmt(avgCost,2) : '--';
-  document.getElementById('bl-costVs').textContent = avgCost > 0 ? `vs 現價 $${fmt(finalPrice,2)}` : '';
-  
-  // Render pools
-  let poolsHtml = '';
-  for(const pool of pools){
-    let badge = '', val = '', sub = '', cls = 'idle';
-    if(pool.mode === 'wait'){
-      badge = '<span class="pc-badge badge-idle">IDLE</span>';
-      sub = pool.startDelay > 0 ? `等待 ${pool.startDelay} 天` : '就緒';
-    } else if(pool.mode === 'bl'){
-      badge = '<span class="pc-badge badge-bl">BUY LOW</span>';
-      val = '$' + fmt(pool.blPrincipal);
-      sub = `Day ${pool.blDays}/${blDays}`;
-      cls = 'active';
-    } else if(pool.mode === 'sh'){
-      badge = '<span class="pc-badge badge-sh">SELL HIGH</span>';
-      val = fmt(pool.shQty,4) + ' ETH';
-      sub = `Day ${pool.shDays}/${shDays}`;
-      cls = 'eth-mode';
-    } else if(pool.mode === 'eth'){
-      badge = '<span class="pc-badge badge-sh">HOLD ETH</span>';
-      val = fmt(pool.shQty,4) + ' ETH';
-      sub = 'SH 到期持有';
-      cls = 'eth-mode';
+
+    // Final stats
+    const finalPrice = simData[simData.length - 1].close;
+    let finalTotalEth = 0;
+    let finalPoolValue = 0;
+    let totalPrincipal = poolCount * poolSize;
+
+    for (const p of pools) {
+      if (p.mode === 'sh' || p.mode === 'bl') {
+        finalPoolValue += p.mode === 'bl' ? blTargetValue(p.principal, p.blDays, blAPR) : p.ethQty * finalPrice;
+      } else {
+        finalPoolValue += p.principal;
+      }
+      finalTotalEth += p.ethQty;
     }
-    poolsHtml += `<div class="pool-card ${cls}"><div class="pc-id">Pool #${pool.id}</div><div class="pc-val">${val}</div><div class="pc-sub">${sub}</div>${badge}</div>`;
-  }
-  document.getElementById('bl-poolsGrid').innerHTML = poolsHtml || '<div style="padding:16px;color:var(--text)">無水池</div>';
-  
-  // Render summary
-  let sumHtml = `
-    <tr><th>指標</th><th>數值</th></tr>
-    <tr><td>初始本金</td><td class="num">${fmtU(initCapital)}</td></tr>
-    <tr><td>最終總值</td><td class="num">${fmtU(totalValue)}</td></tr>
-    <tr><td>總報酬率</td><td class="${roi>=0?'green':'red'}">${roi>=0?'+':''}${fmt(roi)}%</td></tr>
-    <tr><td>BL 總次數</td><td class="num">${blCount}</td></tr>
-    <tr><td>BL 成交數</td><td class="num">${blHit}</td></tr>
-    <tr><td>BL 成交率</td><td class="num">${blCount>0?fmt(blHit/blCount*100):0}%</td></tr>
-    <tr><td>SH 成交數</td><td class="num">${shHit}</td></tr>
-    <tr><td>ETH 持有量</td><td class="num">${fmt(ethQty,4)}</td></tr>
-    <tr><td>ETH 均價</td><td class="num">${avgCost>0?'$'+fmt(avgCost,2):'--'}</td></tr>
-    <tr><td>ETH 現值</td><td class="num">${fmtU(ethValue)}</td></tr>
-    <tr><td>備用金</td><td class="num yellow">${fmtU(reserve)}</td></tr>
-  `;
-  document.getElementById('bl-sumTable').innerHTML = sumHtml;
-  
-  renderLog('');
-  
-  btn.disabled = false;
-  document.getElementById('statusDot').classList.remove('on');
-  document.getElementById('statusText').textContent = 'READY';
-  } catch(e) {
+
+    const roi = ((finalPoolValue - totalPrincipal) / totalPrincipal) * 100;
+    const avgCost = totalInvested > 0 ? totalInvested / totalEth : 0;
+
+    // Update UI stats
+    document.getElementById('s-total').textContent = fmtU(finalPoolValue);
+    document.getElementById('s-roi').textContent = (roi >= 0 ? '+' : '') + fmt(roi) + '%';
+    document.getElementById('s-invested').textContent = fmtU(totalPrincipal);
+    document.getElementById('s-eth').textContent = fmtU(finalTotalEth * finalPrice);
+    document.getElementById('s-ethQty').textContent = fmt(finalTotalEth, 4) + ' ETH';
+    document.getElementById('s-mdd').textContent = fmt(maxDrawdown) + '%';
+
+    let totalBLCount = 0, totalBLHit = 0, totalSHCount = 0, totalSHHit = 0;
+    for (const p of pools) {
+      totalBLCount += p.blCount; totalBLHit += p.blHit;
+      totalSHCount += p.shCount; totalSHHit += p.shHit;
+    }
+    const blWr = totalBLCount > 0 ? (totalBLHit / totalBLCount * 100) : 0;
+    document.getElementById('s-wr').textContent = fmt(blWr) + '%';
+    document.getElementById('s-wrc').textContent = `${totalBLHit}/${totalBLCount}`;
+    document.getElementById('s-shSell').textContent = totalSHHit;
+    document.getElementById('s-shExp').textContent = `${totalSHHit} 次成功`;
+    document.getElementById('s-cost').textContent = avgCost > 0 ? '$' + fmt(avgCost, 2) : '--';
+    document.getElementById('s-costVs').textContent = avgCost > 0 ? `vs 現價 $${fmt(finalPrice, 2)}` : '';
+    document.getElementById('s-price').textContent = '$' + fmt(finalPrice, 0);
+
+    // Update pool cards
+    let poolsHtml = '';
+    for (const p of pools) {
+      let badge = '', val = '', sub = '', cls = '';
+      if (p.mode === 'idle') {
+        badge = '<span class="pc-badge badge-idle">IDLE</span>';
+        val = '$' + fmt(p.principal, 0);
+        sub = '本金';
+        cls = '';
+      } else if (p.mode === 'bl') {
+        const val2 = blTargetValue(p.principal, p.blDays, blAPR);
+        badge = '<span class="pc-badge badge-bl">BUY LOW</span>';
+        val = '$' + fmt(val2, 0);
+        sub = `Day ${p.blDays}/${blDays}`;
+        cls = 'bl';
+      } else if (p.mode === 'sh') {
+        badge = '<span class="pc-badge badge-sh">SELL HIGH</span>';
+        val = fmt(p.ethQty, 4) + ' ETH';
+        sub = `Day ${p.shDays}/${shDays} | KO $${fmt(p.targetPrice, 0)}`;
+        cls = 'sh';
+      }
+      poolsHtml += `<div class="pool-card ${cls}"><div class="pc-id">Pool #${p.id}</div><div class="pc-val">${val}</div><div class="pc-sub">${sub}</div>${badge}</div>`;
+    }
+    document.getElementById('poolsGrid').innerHTML = poolsHtml;
+
+    // Update summary table
+    let sumHtml = `
+      <tr><th>指標</th><th>數值</th></tr>
+      <tr><td>總投入</td><td class="num">${fmtU(totalPrincipal)}</td></tr>
+      <tr><td>最終總值</td><td class="num">${fmtU(finalPoolValue)}</td></tr>
+      <tr><td>總報酬率</td><td class="${roi >= 0 ? 'green' : 'red'}">${roi >= 0 ? '+' : ''}${fmt(roi)}%</td></tr>
+      <tr><td>最大回撤</td><td class="red num">${fmt(maxDrawdown)}%</td></tr>
+      <tr><td>BL 總次數</td><td class="num">${totalBLCount}</td></tr>
+      <tr><td>BL 成交</td><td class="num">${totalBLHit}</td></tr>
+      <tr><td>BL 成交率</td><td class="num">${fmt(blWr)}%</td></tr>
+      <tr><td>SH 成交</td><td class="num">${totalSHHit}</td></tr>
+      <tr><td>ETH 持有</td><td class="num">${fmt(finalTotalEth, 4)}</td></tr>
+      <tr><td>ETH 均買成本</td><td class="num">${avgCost > 0 ? '$' + fmt(avgCost, 2) : '--'}</td></tr>
+      <tr><td>ETH 現值</td><td class="num">${fmtU(finalTotalEth * finalPrice)}</td></tr>
+    `;
+    document.getElementById('sumTable').innerHTML = sumHtml;
+
+    renderLog('');
+
+    btn.disabled = false;
+    document.getElementById('statusDot').classList.remove('on');
+    document.getElementById('statusText').textContent = 'READY';
+  } catch (e) {
     btn.disabled = false;
     document.getElementById('statusDot').classList.remove('on');
     document.getElementById('statusText').textContent = 'ERROR';
