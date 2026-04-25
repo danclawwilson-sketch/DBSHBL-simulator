@@ -1442,6 +1442,8 @@ function startSimulation() {
         // stats
         blCount: 0, blHit: 0,
         shCount: 0, shHit: 0,
+        blEntryAvg: 0, shEntryAvg: 0,
+        blJustRolled: false, shJustRolled: false,
         totalInvested: 0,
         totalReturned: 0,
       });
@@ -1462,12 +1464,16 @@ function startSimulation() {
     }
 
     // Helper: start a new BL cycle on a pool
-    function startBL(pool, day, price) {
-      const targetPrice = price * (1 - blTarget / 100);
+    // blEntryAvg is the avg price on the day we ENTER BL (for computing entry point)
+    function startBL(pool, day, price, avg) {
+      const entryAvg = avg || (simData[day] ? (simData[day].open + simData[day].close) / 2 : price);
+      pool.blEntryAvg = entryAvg;
+      const targetPrice = entryAvg * (1 - blTarget / 100);
       pool.mode = 'bl';
       pool.blDays = 0;
       pool.targetPrice = targetPrice;
       pool.blCount++;
+      pool.blJustRolled = false;
       _allLog.push({ date: simData[day].date, type: 'BL-START', msg: `Pool #${pool.id} 開始 BL (目標 $${targetPrice.toFixed(2)}, 本金 $${pool.principal.toFixed(0)})` });
     }
 
@@ -1506,9 +1512,11 @@ function startSimulation() {
 
     // Helper: start a new SH cycle
     function startSH(pool, day, price) {
+      const shEntryAvg = (simData[day] ? (simData[day].open + simData[day].close) / 2 : price);
+      pool.shEntryAvg = shEntryAvg;
       pool.mode = 'sh';
       pool.shDays = 0;
-      pool.targetPrice = pool.ethCost * (1 + shKO / 100);
+      pool.targetPrice = shEntryAvg * (1 + shKO / 100);
       pool.shCount++;
       _allLog.push({ date: simData[day].date, type: 'SH-START', msg: `Pool #${pool.id} 開始 SH (目標 $${pool.targetPrice.toFixed(2)}, 持有 ${pool.ethQty.toFixed(4)} ETH)` });
     }
@@ -1540,11 +1548,11 @@ function startSimulation() {
 
     // Helper: SH expired without execution - ETH stays, start new SH cycle
     function expireSH(pool, day, price) {
-      // Update ETH cost to current price (mark-to-market)
-      pool.ethCost = price;
+      const shEntryAvg = (simData[day] ? (simData[day].open + simData[day].close) / 2 : price);
+      pool.shEntryAvg = shEntryAvg;
       pool.shDays = 0;
-      // Recalculate KO target from current price
-      pool.targetPrice = price * (1 + shKO / 100);
+      // Recalculate KO target from SH entry average
+      pool.targetPrice = shEntryAvg * (1 + shKO / 100);
       pool.mode = 'sh';
       _allLog.push({ date: simData[day].date, type: 'SH-ROLL', msg: `Pool #${pool.id} SH 到期未成交, 持有 ${pool.ethQty.toFixed(4)} ETH, 重新設定 KO $${pool.targetPrice.toFixed(2)}` });
     }
@@ -1565,12 +1573,13 @@ function startSimulation() {
           pool.blDays++;
           const targetVal = blTargetValue(pool.principal, pool.blDays, blAPR);
 
-          if (d.low <= pool.targetPrice) {
+          const avg = (d.open + d.close) / 2;
+          if (avg <= pool.targetPrice) {
             executeBL(pool, day, price);
           } else if (pool.blDays >= blDays) {
             expireBL(pool, day, price);
             // After rolling, check if today's price triggers BL immediately
-            if (d.low <= pool.targetPrice) {
+            if (avg <= pool.targetPrice) {
               executeBL(pool, day, price);
             }
           }
@@ -1579,12 +1588,12 @@ function startSimulation() {
           // Update ethCost to current price (mark-to-market)
           pool.ethCost = price;
 
-          if (d.high >= pool.targetPrice) {
+          if (avg >= pool.targetPrice) {
             executeSH(pool, day, price);
           } else if (pool.shDays >= shDays) {
             expireSH(pool, day, price);
             // After rolling, check if today's price triggers SH immediately
-            if (d.high >= pool.targetPrice) {
+            if (avg >= pool.targetPrice) {
               executeSH(pool, day, price);
             }
           }
