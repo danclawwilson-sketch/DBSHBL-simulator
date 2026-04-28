@@ -1717,7 +1717,7 @@ function startSimulation() {
     document.getElementById('bl-sumTable').innerHTML = sumHtml;
 
     renderLog('');
-    renderCharts(equityHistory, pools, finalPrice, poolCount, poolSize, blAPR, shDays);
+    renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount, poolSize, blAPR, shDays);
 
     btn.disabled = false;
     document.getElementById('statusDot').classList.remove('on');
@@ -1731,7 +1731,7 @@ function startSimulation() {
   }
 }
 
-function renderCharts(equityHistory, pools, finalPrice, poolCount, poolSize, blAPR, shDays) {
+function renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount, poolSize, blAPR, shDays) {
   function blTargetValue(principal, days, apr) {
     const dailyRate = apr / 365 / 100;
     return principal * Math.pow(1 + dailyRate, days);
