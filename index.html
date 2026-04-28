@@ -1655,8 +1655,6 @@ function startSimulation() {
     document.getElementById('bl-wrc').textContent = `${totalBLHit}/${totalBLCount}`;
     document.getElementById('bl-shSell').textContent = totalSHHit;
     document.getElementById('bl-shExp').textContent = `${totalSHHit} 次成功`;
-    document.getElementById('bl-cost').textContent = avgCost > 0 ? '$' + fmt(avgCost, 2) : '--';
-    document.getElementById('bl-costVs').textContent = avgCost > 0 ? `vs 現價 $${fmt(finalPrice, 2)}` : '';
     document.getElementById('bl-price').textContent = '$' + fmt(finalPrice, 0);
 
     // Update pool cards
