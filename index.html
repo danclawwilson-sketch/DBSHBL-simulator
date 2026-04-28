@@ -1423,6 +1423,7 @@ function startSimulation() {
     else if (_simRange === '8d') dataStart = Math.max(0, dataEnd - 8);
 
     const simData = ETH_DATA.slice(dataStart, dataEnd);
+    console.log(`DEBUG: range=${_simRange}, dataStart=${dataStart}, dataEnd=${dataEnd}, simData.length=${simData.length}, pools=${poolCount}`);
 
     // Each pool: independent funding, cycles BL -> SH -> BL
     // Pool state machine: 'idle' -> 'bl' -> 'sh' -> 'bl'
