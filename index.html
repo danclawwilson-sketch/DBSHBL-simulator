@@ -1588,6 +1588,7 @@ function startSimulation() {
           // Update ethCost to current price (mark-to-market)
           pool.ethCost = price;
 
+          const avg = (d.open + d.close) / 2;
           if (avg >= pool.targetPrice) {
             executeSH(pool, day, price);
           } else if (pool.shDays >= shDays) {
