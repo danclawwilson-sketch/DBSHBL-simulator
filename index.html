@@ -95,6 +95,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;b
 .pc-val{font-size:1rem;color:var(--text3);}
 .pc-sub{font-size:.65rem;color:var(--text);margin-top:2px;}
 .pc-badge{display:inline-block;padding:2px 5px;font-size:.62rem;font-weight:700;margin-top:5px;letter-spacing:.08em;border:1px solid;text-transform:uppercase;}
+.pc-pnl{font-size:.68rem;font-weight:700;margin-top:3px;}
 .badge-bl{border-color:var(--orange);color:var(--orange);}
 .badge-sh{border-color:var(--red);color:var(--red);}
 .badge-idle{border-color:var(--border2);color:var(--text);}
@@ -205,7 +206,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;b
 <div class="stat"><div class="stat-lbl">最大回撤 MDD</div><div class="stat-val red" id="bl-mdd">--</div><div class="stat-sub">歷史最大回撤</div></div>
 <div class="stat"><div class="stat-lbl">BL 成交率</div><div class="stat-val" id="bl-wr">--</div><div class="stat-sub" id="bl-wrc">--</div></div>
 <div class="stat"><div class="stat-lbl">SH 成功</div><div class="stat-val" id="bl-shSell">--</div><div class="stat-sub" id="bl-shExp">--</div></div>
-<div class="stat"><div class="stat-lbl">ETH 均買成本</div><div class="stat-val" id="bl-cost">--</div><div class="stat-sub" id="bl-costVs">--</div></div>
 <div class="stat"><div class="stat-lbl">現價</div><div class="stat-val" id="bl-price">--</div><div class="stat-sub">收盤均價</div></div>
 </div>
 <div class="chart-box"><div class="chart-inner">
@@ -1636,7 +1636,6 @@ function startSimulation() {
     }
 
     const roi = ((finalPoolValue - totalPrincipal) / totalPrincipal) * 100;
-    const avgCost = totalEth > 0 ? totalPrincipal / totalEth : 0;
 
     // Update UI stats
     document.getElementById('bl-total').textContent = fmtU(finalPoolValue);
@@ -1663,11 +1662,11 @@ function startSimulation() {
     // Update pool cards
     let poolsHtml = '';
     for (const p of pools) {
-      let badge = '', val = '', sub = '', cls = '';
+      let badge = '', val = '', sub = '', cls = '', pnlHtml = '';
       if (p.mode === 'idle') {
         badge = '<span class="pc-badge badge-idle">IDLE</span>';
         val = '$' + fmt(p.principal, 0);
-        sub = '本金';
+        sub = '本金 ' + (p.blCount + p.shHit > 0 ? `${p.blCount}BL/${p.shHit}SH` : '');
         cls = '';
       } else if (p.mode === 'bl') {
         const val2 = blTargetValue(p.principal, p.blDays, blAPR);
@@ -1676,12 +1675,19 @@ function startSimulation() {
         sub = `Day ${p.blDays}/${blDays}`;
         cls = 'bl';
       } else if (p.mode === 'sh') {
+        const costBasis = p.principal;
+        const currentVal = p.ethQty * finalPrice;
+        const avgCostPerEth = p.ethQty > 0 ? costBasis / p.ethQty : 0;
+        const pnl = currentVal - costBasis;
+        const pnlPct = costBasis > 0 ? (pnl / costBasis * 100) : 0;
+        const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
         badge = '<span class="pc-badge badge-sh">SELL HIGH</span>';
         val = fmt(p.ethQty, 4) + ' ETH';
-        sub = `Day ${p.shDays}/${shDays} | KO $${fmt(p.targetPrice, 0)}`;
+        sub = `均買 $${fmt(avgCostPerEth, 2)} | 現值 $${fmt(currentVal, 0)}`;
+        pnlHtml = `<div class="pc-pnl" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 0)} (${pnlPct >= 0 ? '+' : ''}${fmt(pnlPct, 1)}%)</div>`;
         cls = 'sh';
       }
-      poolsHtml += `<div class="pool-card ${cls}"><div class="pc-id">Pool #${p.id}</div><div class="pc-val">${val}</div><div class="pc-sub">${sub}</div>${badge}</div>`;
+      poolsHtml += `<div class="pool-card ${cls}"><div class="pc-id">Pool #${p.id}</div><div class="pc-val">${val}</div><div class="pc-sub">${sub}</div>${pnlHtml}${badge}</div>`;
     }
     document.getElementById('bl-poolsGrid').innerHTML = poolsHtml;
 
@@ -1696,8 +1702,7 @@ function startSimulation() {
       <tr><td>BL 成交</td><td class="num">${totalBLHit}</td></tr>
       <tr><td>BL 成交率</td><td class="num">${fmt(blWr)}%</td></tr>
       <tr><td>SH 成交</td><td class="num">${totalSHHit}</td></tr>
-      <tr><td>ETH 持有</td><td class="num">${fmt(finalTotalEth, 4)}</td></tr>
-      <tr><td>ETH 均買成本</td><td class="num">${avgCost > 0 ? '$' + fmt(avgCost, 2) : '--'}</td></tr>
+      <tr><td>ETH 持有</td><td class="num">${fmt(finalTotalEth, 4)} ETH</td></tr>
       <tr><td>ETH 現值</td><td class="num">${fmtU(finalTotalEth * finalPrice)}</td></tr>
     `;
     document.getElementById('bl-sumTable').innerHTML = sumHtml;
