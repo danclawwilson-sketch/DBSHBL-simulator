@@ -1636,7 +1636,7 @@ function startSimulation() {
     }
 
     const roi = ((finalPoolValue - totalPrincipal) / totalPrincipal) * 100;
-    const avgCost = totalInvested > 0 ? totalInvested / totalEth : 0;
+    const avgCost = totalEth > 0 ? totalPrincipal / totalEth : 0;
 
     // Update UI stats
     document.getElementById('bl-total').textContent = fmtU(finalPoolValue);
