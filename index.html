@@ -1456,6 +1456,7 @@ function startSimulation() {
     let peakValue = 0;
     let maxDrawdown = 0;
     let equityHistory = [];
+    let poolSnapshots = [];
 
     // Helper: compute BL target value with yield
     function blTargetValue(principal, days, apr) {
@@ -1614,6 +1615,16 @@ function startSimulation() {
       const dayEquity = dailyPoolValue;
       equityHistory.push({ date: d.date, equity: dayEquity, price });
 
+      // Snapshot each pool's state for stacked chart
+      poolSnapshots.push(pools.map(p => ({
+        mode: p.mode,
+        principal: p.principal,
+        ethQty: p.ethQty,
+        blDays: p.blDays,
+        shDays: p.shDays,
+        targetPrice: p.targetPrice,
+      })));
+
       // Track peak and max drawdown
       if (dayEquity > peakValue) peakValue = dayEquity;
       const drawdown = peakValue > 0 ? (peakValue - dayEquity) / peakValue * 100 : 0;
@@ -1706,6 +1717,7 @@ function startSimulation() {
     document.getElementById('bl-sumTable').innerHTML = sumHtml;
 
     renderLog('');
+    renderCharts(equityHistory, pools, finalPrice, poolCount, poolSize, blAPR, shDays);
 
     btn.disabled = false;
     document.getElementById('statusDot').classList.remove('on');
@@ -1717,6 +1729,114 @@ function startSimulation() {
     console.error('Simulation error:', e);
     alert('模擬執行失敗: ' + e.message);
   }
+}
+
+function renderCharts(equityHistory, pools, finalPrice, poolCount, poolSize, blAPR, shDays) {
+  function blTargetValue(principal, days, apr) {
+    const dailyRate = apr / 365 / 100;
+    return principal * Math.pow(1 + dailyRate, days);
+  }
+  // Destroy old charts if any
+  if (blChartMain) { blChartMain.destroy(); blChartMain = null; }
+  if (blChartStack) { blChartStack.destroy(); blChartStack = null; }
+
+  const mainCanvas = document.getElementById('bl-chartMain');
+  const stackCanvas = document.getElementById('bl-chartStack');
+  if (!mainCanvas || !stackCanvas) return;
+
+  const labels = equityHistory.map(e => e.date);
+
+  // Chart 1: Total Equity vs ETH price
+  const equityData = equityHistory.map(e => e.equity);
+  const priceData = equityHistory.map(e => e.price);
+  const maxEquity = Math.max(...equityData);
+  const maxPrice = Math.max(...priceData);
+
+  // Normalize ETH price to equity scale for comparison
+  const normalizedPrice = priceData.map(p => (p / maxPrice) * maxEquity);
+
+  blChartMain = new Chart(mainCanvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '總資產',
+          data: equityData,
+          borderColor: '#00ccff',
+          backgroundColor: 'rgba(0,204,255,0.1)',
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y',
+        },
+        {
+          label: 'ETH 現價',
+          data: normalizedPrice,
+          borderColor: '#ff9944',
+          backgroundColor: 'transparent',
+          borderDash: [4, 4],
+          fill: false,
+          tension: 0.3,
+          yAxisID: 'y',
+          pointRadius: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: '#99ccee', font: { size: 10 } } } },
+      scales: {
+        x: { display: false },
+        y: {
+          type: 'logarithmic',
+          ticks: { color: '#4a7aaa', callback: v => '$' + v.toLocaleString() },
+          grid: { color: 'rgba(13,48,96,0.5)' }
+        }
+      }
+    }
+  });
+
+  // Chart 2: Asset composition (pool values stacked)
+  // Use poolSnapshots to get historical state for each day
+  const stackData = [];
+  for (let day = 0; day < poolSnapshots.length; day++) {
+    const snap = poolSnapshots[day];
+    const price = equityHistory[day].price;
+    const dayVals = snap.map((p, i) => {
+      if (p.mode === 'idle') return p.principal;
+      if (p.mode === 'bl') return blTargetValue(p.principal, p.blDays, blAPR);
+      if (p.mode === 'sh') return p.ethQty * price;
+      return 0;
+    });
+    stackData.push(dayVals);
+  }
+
+  blChartStack = new Chart(stackCanvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: pools.map((p, i) => ({
+        label: 'Pool #' + (i + 1),
+        data: stackData.map(d => d[i]),
+        fill: true,
+        tension: 0.3,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          stacked: true,
+          ticks: { color: '#4a7aaa', callback: v => '$' + v.toLocaleString() },
+          grid: { color: 'rgba(13,48,96,0.5)' }
+        }
+      }
+    }
+  });
 }
 
 function renderLog(filter){
