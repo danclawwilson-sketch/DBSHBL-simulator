@@ -1681,7 +1681,7 @@ function startSimulation() {
         const val2 = blTargetValue(p.principal, p.blDays, blAPR);
         badge = '<span class="pc-badge badge-bl">BUY LOW</span>';
         val = '$' + fmt(val2, 0);
-        sub = `Day ${p.blDays}/${blDays}`;
+        sub = `Day ${p.blDays}/${blDays} | ${p.blCount}BL/${p.shHit}SH`;
         cls = 'bl';
       } else if (p.mode === 'sh') {
         const costBasis = p.principal;
@@ -1692,7 +1692,7 @@ function startSimulation() {
         const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
         badge = '<span class="pc-badge badge-sh">SELL HIGH</span>';
         val = fmt(p.ethQty, 4) + ' ETH';
-        sub = `均買 $${fmt(avgCostPerEth, 2)} | 現值 $${fmt(currentVal, 0)}`;
+        sub = `均買 $${fmt(avgCostPerEth, 2)} | 現值 $${fmt(currentVal, 0)} | ${p.blCount}BL/${p.shHit}SH`;
         pnlHtml = `<div class="pc-pnl" style="color:${pnlColor}">${pnl >= 0 ? '+' : ''}$${fmt(pnl, 0)} (${pnlPct >= 0 ? '+' : ''}${fmt(pnlPct, 1)}%)</div>`;
         cls = 'sh';
       }
