@@ -1749,8 +1749,8 @@ function renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount
   // Chart 1: Total Equity vs ETH price
   const equityData = equityHistory.map(e => e.equity);
   const priceData = equityHistory.map(e => e.price);
-  const maxEquity = Math.max(...equityData);
-  const maxPrice = Math.max(...priceData);
+  const maxEquity = equityData.length ? Math.max(...equityData) : 1;
+  const maxPrice = priceData.length ? Math.max(...priceData) : 1;
 
   // Normalize ETH price to equity scale for comparison
   const normalizedPrice = priceData.map(p => (p / maxPrice) * maxEquity);
@@ -1790,7 +1790,7 @@ function renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount
       scales: {
         x: { display: false },
         y: {
-          type: 'logarithmic',
+          type: 'linear', min: 0,
           ticks: { color: '#4a7aaa', callback: v => '$' + v.toLocaleString() },
           grid: { color: 'rgba(13,48,96,0.5)' }
         }
