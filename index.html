@@ -1857,11 +1857,7 @@ function renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount
   });
 }
 
-// ═══════════════════════════════════════
-// BLSH 參數矩陣比較功能
-// ═══════════════════════════════════════
-
-const MATRIX_VALUES = [1, 2, 3, 4]; // 1%, 2%, 3%, 4%
+// Matrix uses dynamic range: BL 1%..blTarget, SH 1%..shKO
 
 function runSimForParams(blTarget, shKO) {
   const poolSize = parseFloat(document.getElementById('poolSize').value) || 1000;
@@ -1992,17 +1988,22 @@ function runMatrixCompare() {
   progressDiv.textContent = '準備執行...';
   resultDiv.innerHTML = '';
 
-  const blValues = MATRIX_VALUES;
-  const shValues = MATRIX_VALUES;
+  // Dynamic range based on current user settings
+  const maxBL = Math.max(1, parseInt(document.getElementById('blTarget').value) || 4);
+  const maxSH = Math.max(1, parseFloat(document.getElementById('shKO').value) || 4);
+  const blValues = [];
+  const shValues = [];
+  for (let i = 1; i <= maxBL; i++) blValues.push(i);
+  for (let i = 1; i <= maxSH; i++) shValues.push(i);
+
   const total = blValues.length * shValues.length;
   let completed = 0;
   const results = {};
 
   function runNext(i, j) {
     if (i >= blValues.length) {
-      // Done - render
       progressDiv.textContent = '渲染結果...';
-      renderMatrixTable(results, blValues, shValues);
+      renderMatrixTable(results, blValues, shValues, maxBL, maxSH);
       btn.disabled = false;
       progressDiv.textContent = '完成！';
       setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
@@ -2018,7 +2019,6 @@ function runMatrixCompare() {
 
     progressDiv.textContent = `執行中: BL ${blTarget}% × SH ${shKO}% (${completed + 1}/${total})`;
 
-    // Use setTimeout to not block UI
     setTimeout(() => {
       results[key] = runSimForParams(blTarget, shKO);
       completed++;
@@ -2030,7 +2030,7 @@ function runMatrixCompare() {
   runNext(0, 0);
 }
 
-function renderMatrixTable(results, blValues, shValues) {
+function renderMatrixTable(results, blValues, shValues, maxBL, maxSH) {
   const resultDiv = document.getElementById('matrixResult');
   const initCapital = parseFloat(document.getElementById('initCapital').value) || 10000;
 
@@ -2039,7 +2039,8 @@ function renderMatrixTable(results, blValues, shValues) {
   const minVal = Math.min(...vals);
   const maxVal = Math.max(...vals);
 
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:.8rem;">';
+  let html = `<div style="margin-bottom:10px;font-size:.68rem;color:var(--text);letter-spacing:.06em;">BL 買入價: 1% ~ ${maxBL}% &nbsp;|&nbsp; SH Knock Out: 1% ~ ${maxSH}%</div>`;
+  html += '<table style="width:100%;border-collapse:collapse;font-size:.8rem;">';
 
   // Header row
   html += '<tr>';
