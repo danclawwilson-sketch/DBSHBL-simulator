@@ -1905,12 +1905,14 @@ function runSimForParams(blTarget, shKO) {
 
     for (const pool of pools) {
       if (pool.mode === 'idle') {
-        // Start BL
-        const entryAvg = price;
-        pool.blEntryAvg = entryAvg;
-        pool.mode = 'bl';
-        pool.blDays = 0;
-        pool.targetPrice = entryAvg * (1 - blTarget / 100);
+        const delay = pool.id - 1;
+        if (day === delay) {
+          const entryAvg = price;
+          pool.blEntryAvg = entryAvg;
+          pool.mode = 'bl';
+          pool.blDays = 0;
+          pool.targetPrice = entryAvg * (1 - blTarget / 100);
+        }
       } else if (pool.mode === 'bl') {
         pool.blDays++;
         if (price <= pool.targetPrice) {
@@ -1951,6 +1953,19 @@ function runSimForParams(blTarget, shKO) {
           // SH expired - roll
           pool.shDays = 0;
           pool.targetPrice = price * (1 + shKO / 100);
+          // After rolling, check if today's price already triggers SH
+          if (price >= pool.targetPrice) {
+            const execPrice = pool.targetPrice;
+            const proceeds = pool.ethQty * execPrice;
+            pool.mode = 'idle';
+            pool.principal = proceeds;
+            pool.totalReturned += proceeds;
+            totalReturned += proceeds;
+            totalEth -= pool.ethQty;
+            pool.ethQty = 0;
+            pool.totalInvested = 0;
+            pool.ethCost = 0;
+          }
         }
       }
     }
