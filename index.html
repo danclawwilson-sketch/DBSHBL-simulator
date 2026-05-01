@@ -1905,14 +1905,11 @@ function runSimForParams(blTarget, shKO) {
 
     for (const pool of pools) {
       if (pool.mode === 'idle') {
-        const delay = pool.id - 1;
-        if (day === delay) {
-          const entryAvg = price;
-          pool.blEntryAvg = entryAvg;
-          pool.mode = 'bl';
-          pool.blDays = 0;
-          pool.targetPrice = entryAvg * (1 - blTarget / 100);
-        }
+        const entryAvg = price;
+        pool.blEntryAvg = entryAvg;
+        pool.mode = 'bl';
+        pool.blDays = 0;
+        pool.targetPrice = entryAvg * (1 - blTarget / 100);
       } else if (pool.mode === 'bl') {
         pool.blDays++;
         if (price <= pool.targetPrice) {
@@ -2015,34 +2012,31 @@ function runMatrixCompare() {
   let completed = 0;
   const results = {};
 
-  function runNext(i, j) {
-    if (i >= blValues.length) {
-      progressDiv.textContent = '渲染結果...';
-      renderMatrixTable(results, blValues, shValues, maxBL, maxSH);
-      btn.disabled = false;
-      progressDiv.textContent = '完成！';
-      setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
-      return;
-    }
-    if (j >= shValues.length) {
-      runNext(i + 1, 0);
-      return;
-    }
-    const blTarget = blValues[i];
-    const shKO = shValues[j];
-    const key = `${blTarget}_${shKO}`;
-
-    progressDiv.textContent = `執行中: BL ${blTarget}% × SH ${shKO}% (${completed + 1}/${total})`;
-
-    setTimeout(() => {
-      results[key] = runSimForParams(blTarget, shKO);
-      completed++;
-      progressDiv.textContent = `執行中: BL ${blTarget}% × SH ${shKO}% (${completed}/${total})`;
-      runNext(i, j + 1);
-    }, 10);
+  // 順序執行：用 Promise 包裝 setTimeout，確保每格算完才算下一格
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  runNext(0, 0);
+  async function runAll() {
+    for (let i = 0; i < blValues.length; i++) {
+      for (let j = 0; j < shValues.length; j++) {
+        const blTarget = blValues[i];
+        const shKO = shValues[j];
+        const key = `${blTarget}_${shKO}`;
+        completed++;
+        progressDiv.textContent = `執行中: BL ${blTarget}% × SH ${shKO}% (${completed}/${total})`;
+        results[key] = runSimForParams(blTarget, shKO);
+        await delay(10); // 給瀏覽器一點喘息時間
+      }
+    }
+    progressDiv.textContent = '渲染結果...';
+    renderMatrixTable(results, blValues, shValues, maxBL, maxSH);
+    btn.disabled = false;
+    progressDiv.textContent = '完成！';
+    setTimeout(() => { progressDiv.style.display = 'none'; }, 2000);
+  }
+
+  runAll().catch(err => { console.error(err); btn.disabled = false; });
 }
 
 function renderMatrixTable(results, blValues, shValues, maxBL, maxSH) {
