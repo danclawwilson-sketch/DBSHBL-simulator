@@ -1916,14 +1916,21 @@ function runSimForParams(blTarget, shKO) {
     pool.shEntryAvg = (simData[day].open + simData[day].close) / 2;
     pool.targetPrice = pool.shEntryAvg * (1 + shKO / 100);
     pool.totalInvested += pool.principal;
-    pool.ethQty = ethBought;
   }
 
   function expireBL(pool, day, price) {
     const finalValue = blTargetValue(pool.principal, pool.blDays, blAPR);
     pool.principal = finalValue;
     pool.blDays = 0;
-    pool.targetPrice = price * (1 - blTarget / 100);
+    pool.targetPrice = (simData[day].open + simData[day].close) / 2 * (1 - blTarget / 100);
+  }
+
+  function startSH(pool, day, price) {
+    const avg = (simData[day].open + simData[day].close) / 2;
+    pool.shEntryAvg = avg;
+    pool.mode = 'sh';
+    pool.shDays = 0;
+    pool.targetPrice = pool.shEntryAvg * (1 + shKO / 100);
   }
 
   function executeSH(pool, day, price) {
@@ -1973,12 +1980,10 @@ function runSimForParams(blTarget, shKO) {
         }
       } else if (pool.mode === 'sh') {
         pool.shDays++;
-        pool.ethCost = price; // mark-to-market
         if (avg >= pool.targetPrice) {
           executeSH(pool, day, price);
         } else if (pool.shDays >= shDays) {
           expireSH(pool, day, price);
-          // After rolling, check if today's price triggers SH immediately
           if (avg >= pool.targetPrice) {
             executeSH(pool, day, price);
           }
