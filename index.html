@@ -1861,9 +1861,9 @@ function renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount
 
 function runSimForParams(blTarget, shKO) {
   const poolSize = parseFloat(document.getElementById('poolSize').value) || 1000;
-  const blDays = parseInt(document.getElementById('blDays').value) || 1;
+  const blDays = parseInt(document.getElementById('blDays').value) || 3;
   const blAPR = parseFloat(document.getElementById('blAPR').value) || 150;
-  const shDays = parseInt(document.getElementById('shDays').value) || 1;
+  const shDays = parseInt(document.getElementById('shDays').value) || 3;
   const shAPR = parseFloat(document.getElementById('shAPR').value) || 150;
   const initCapital = parseFloat(document.getElementById('initCapital').value) || 10000;
   const nPools = poolCount;
