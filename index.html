@@ -1913,8 +1913,8 @@ function runSimForParams(blTarget, shKO) {
     pool.ethQty = ethBought;
     pool.ethCost = execPrice;
     pool.shDays = 0;
-    pool.shEntryAvg = (simData[day].open + simData[day].close) / 2;
-    pool.targetPrice = pool.shEntryAvg * (1 + shKO / 100);
+    
+    pool.targetPrice = execPrice * (1 + shKO / 100);
     pool.totalInvested += pool.principal;
   }
 
@@ -1922,7 +1922,7 @@ function runSimForParams(blTarget, shKO) {
     const finalValue = blTargetValue(pool.principal, pool.blDays, blAPR);
     pool.principal = finalValue;
     pool.blDays = 0;
-    pool.targetPrice = (simData[day].open + simData[day].close) / 2 * (1 - blTarget / 100);
+    pool.targetPrice = price * (1 - blTarget / 100);
   }
 
   function startSH(pool, day, price) {
@@ -1930,7 +1930,7 @@ function runSimForParams(blTarget, shKO) {
     pool.shEntryAvg = avg;
     pool.mode = 'sh';
     pool.shDays = 0;
-    pool.targetPrice = pool.shEntryAvg * (1 + shKO / 100);
+    pool.targetPrice = execPrice * (1 + shKO / 100);
   }
 
   function executeSH(pool, day, price) {
