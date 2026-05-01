@@ -1861,9 +1861,9 @@ function renderCharts(equityHistory, poolSnapshots, pools, finalPrice, poolCount
 
 function runSimForParams(blTarget, shKO) {
   const poolSize = parseFloat(document.getElementById('poolSize').value) || 1000;
-  const blDays = parseInt(document.getElementById('blDays').value) || 3;
+  const blDays = parseInt(document.getElementById('blDays').value) || 1;
   const blAPR = parseFloat(document.getElementById('blAPR').value) || 150;
-  const shDays = parseInt(document.getElementById('shDays').value) || 3;
+  const shDays = parseInt(document.getElementById('shDays').value) || 1;
   const shAPR = parseFloat(document.getElementById('shAPR').value) || 150;
   const initCapital = parseFloat(document.getElementById('initCapital').value) || 10000;
   const nPools = poolCount;
@@ -1880,88 +1880,107 @@ function runSimForParams(blTarget, shKO) {
 
   const simData = ETH_DATA.slice(dataStart, dataEnd);
 
-  // Initialize pools
+  // Initialize pools (id starting from 1 for staggered entry)
   let pools = [];
-  for (let i = 0; i < nPools; i++) {
+  for (let i = 1; i <= nPools; i++) {
     pools.push({
+      id: i,
       mode: 'idle', principal: poolSize,
       blDays: 0, shDays: 0, ethQty: 0, ethCost: 0, targetPrice: 0,
       totalInvested: 0, totalReturned: 0,
+      blEntryAvg: 0, shEntryAvg: 0,
     });
   }
-
-  let totalInvested = 0;
-  let totalReturned = 0;
-  let totalEth = 0;
 
   function blTargetValue(principal, days, apr) {
     const dailyRate = apr / 365 / 100;
     return principal * Math.pow(1 + dailyRate, days);
   }
 
+  function startBL(pool, day, price) {
+    const avg = (simData[day].open + simData[day].close) / 2;
+    pool.blEntryAvg = avg;
+    pool.mode = 'bl';
+    pool.blDays = 0;
+    pool.targetPrice = avg * (1 - blTarget / 100);
+  }
+
+  function executeBL(pool, day, price) {
+    const execPrice = pool.targetPrice;
+    const targetVal = blTargetValue(pool.principal, pool.blDays, blAPR);
+    const ethBought = targetVal / execPrice;
+    pool.mode = 'sh';
+    pool.ethQty = ethBought;
+    pool.ethCost = execPrice;
+    pool.shDays = 0;
+    pool.shEntryAvg = (simData[day].open + simData[day].close) / 2;
+    pool.targetPrice = pool.shEntryAvg * (1 + shKO / 100);
+    pool.totalInvested += pool.principal;
+    pool.ethQty = ethBought;
+  }
+
+  function expireBL(pool, day, price) {
+    const finalValue = blTargetValue(pool.principal, pool.blDays, blAPR);
+    pool.principal = finalValue;
+    pool.blDays = 0;
+    pool.targetPrice = price * (1 - blTarget / 100);
+  }
+
+  function executeSH(pool, day, price) {
+    const execPrice = pool.targetPrice;
+    const proceeds = pool.ethQty * execPrice;
+    pool.mode = 'idle';
+    pool.principal = proceeds;
+    pool.totalReturned += proceeds;
+    pool.ethQty = 0;
+    pool.totalInvested = 0;
+    pool.ethCost = 0;
+    // Immediately start new BL
+    startBL(pool, day, price);
+  }
+
+  function expireSH(pool, day, price) {
+    const avg = (simData[day].open + simData[day].close) / 2;
+    pool.shEntryAvg = avg;
+    pool.shDays = 0;
+    pool.targetPrice = avg * (1 + shKO / 100);
+    pool.mode = 'sh';
+  }
+
   // Run simulation
   for (let day = 0; day < simData.length; day++) {
-    const price = simData[day].close;
+    const d = simData[day];
+    const price = d.close;
+    const avg = (d.open + d.close) / 2;
 
     for (const pool of pools) {
       if (pool.mode === 'idle') {
-        const entryAvg = price;
-        pool.blEntryAvg = entryAvg;
-        pool.mode = 'bl';
-        pool.blDays = 0;
-        pool.targetPrice = entryAvg * (1 - blTarget / 100);
+        // Staggered entry: pool 1 on day 0, pool 2 on day 1, etc.
+        const delay = pool.id - 1;
+        if (day === delay) {
+          startBL(pool, day, price);
+        }
       } else if (pool.mode === 'bl') {
         pool.blDays++;
-        if (price <= pool.targetPrice) {
-          // BL hit - buy ETH
-          const execPrice = pool.targetPrice;
-          const targetVal = blTargetValue(pool.principal, pool.blDays, blAPR);
-          const ethBought = targetVal / execPrice;
-          pool.mode = 'sh';
-          pool.ethQty = ethBought;
-          pool.ethCost = execPrice;
-          pool.shDays = 0;
-          pool.targetPrice = execPrice * (1 + shKO / 100);
-          pool.totalInvested += pool.principal;
-          totalInvested += pool.principal;
-          totalEth += ethBought;
+        if (avg <= pool.targetPrice) {
+          executeBL(pool, day, price);
         } else if (pool.blDays >= blDays) {
-          // BL expired - roll
-          const finalValue = blTargetValue(pool.principal, pool.blDays, blAPR);
-          pool.principal = finalValue;
-          pool.blDays = 0;
-          pool.targetPrice = price * (1 - blTarget / 100);
+          expireBL(pool, day, price);
+          // After rolling, check if today's price triggers BL immediately
+          if (avg <= pool.targetPrice) {
+            executeBL(pool, day, price);
+          }
         }
       } else if (pool.mode === 'sh') {
         pool.shDays++;
-        if (price >= pool.targetPrice) {
-          // SH hit - sell ETH
-          const execPrice = pool.targetPrice;
-          const proceeds = pool.ethQty * execPrice;
-          pool.mode = 'idle';
-          pool.principal = proceeds;
-          pool.totalReturned += proceeds;
-          totalReturned += proceeds;
-          totalEth -= pool.ethQty;
-          pool.ethQty = 0;
-          pool.totalInvested = 0;
-          pool.ethCost = 0;
+        pool.ethCost = price; // mark-to-market
+        if (avg >= pool.targetPrice) {
+          executeSH(pool, day, price);
         } else if (pool.shDays >= shDays) {
-          // SH expired - roll
-          pool.shDays = 0;
-          pool.targetPrice = price * (1 + shKO / 100);
-          // After rolling, check if today's price already triggers SH
-          if (price >= pool.targetPrice) {
-            const execPrice = pool.targetPrice;
-            const proceeds = pool.ethQty * execPrice;
-            pool.mode = 'idle';
-            pool.principal = proceeds;
-            pool.totalReturned += proceeds;
-            totalReturned += proceeds;
-            totalEth -= pool.ethQty;
-            pool.ethQty = 0;
-            pool.totalInvested = 0;
-            pool.ethCost = 0;
+          expireSH(pool, day, price);
+          // After rolling, check if today's price triggers SH immediately
+          if (avg >= pool.targetPrice) {
+            executeSH(pool, day, price);
           }
         }
       }
@@ -1975,14 +1994,11 @@ function runSimForParams(blTarget, shKO) {
 
   for (const pool of pools) {
     if (pool.mode === 'bl') {
-      // BL mode: value = principal with accumulated yield
       finalTotalAsset += blTargetValue(pool.principal, pool.blDays, blAPR);
     } else if (pool.mode === 'sh') {
-      // SH mode: value = ETH qty * current price
       const finalPrice = simData[simData.length - 1].close;
       finalTotalAsset += pool.ethQty * finalPrice;
     } else {
-      // idle: principal is the value
       finalTotalAsset += pool.principal;
     }
   }
